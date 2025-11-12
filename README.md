@@ -1,0 +1,1 @@
+# AURA-AI-based-Urticaria-Recognition-and-Assessment-frontend
