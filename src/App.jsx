@@ -7,6 +7,9 @@ import SignIn from "./Pages/SignIn";
 import ContactPage from "./Pages/ContactPage";
 import AboutUsPage from "./Pages/AboutUsPage";
 import ProfilePage from "./Pages/ProfilePage";
+import ReviewQueuePage from "./Pages/active-learning/ReviewQueuePage";
+import ReviewCaseDetailPage from "./Pages/active-learning/ReviewCaseDetailPage";
+import ActiveLearningStatusPage from "./Pages/active-learning/ActiveLearningStatusPage";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
@@ -23,6 +26,15 @@ const App = () => {
             <Route path="/sign-up" element={<SignUp />} />
             <Route path="/sign-in" element={<SignIn />} />
             <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/active-learning/review" element={<ReviewQueuePage />} />
+            <Route
+              path="/active-learning/review/:caseId"
+              element={<ReviewCaseDetailPage />}
+            />
+            <Route
+              path="/active-learning/status"
+              element={<ActiveLearningStatusPage />}
+            />
             {/* <Route path="/profile" element={<DashboardLayout><ProfilePage /></DashboardLayout>} /> */}
             {/* <Route path="/dashboard" element={<DashboardLayout><DashboardPage /></DashboardLayout>} />
             <Route path="/patient-profile" element={<DashboardLayout><PatientProfilePage /></DashboardLayout>} />

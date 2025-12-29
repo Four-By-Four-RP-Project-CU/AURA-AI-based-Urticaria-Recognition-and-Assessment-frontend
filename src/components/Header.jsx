@@ -149,6 +149,18 @@ const Header = () => {
             Contact
           </Link>
         </Navbar.Link>
+        <Navbar.Link active={path === "/active-learning/review"} as={"div"}>
+          <Link
+            to="/active-learning/review"
+            className={`text-lg font-semibold ${
+              path === "/active-learning/review"
+                ? "text-blue-600 dark:text-purple-400"
+                : "text-gray-700 dark:text-gray-300"
+            } hover:text-blue-600 dark:hover:text-purple-400 transition-colors`}
+          >
+            Review Dashboard
+          </Link>
+        </Navbar.Link>
       </Navbar.Collapse>
     </Navbar>
   );
