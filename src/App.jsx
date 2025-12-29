@@ -22,6 +22,9 @@ import DashboardNew from "./Pages/IT22607232/DashboardNew";
 import RiskAssessment from "./Pages/IT22607232/RiskAssessment";
 import RiskResultsPage from "./Pages/IT22607232/RiskResultsPage";
 import RiskHistoryPage from "./Pages/IT22607232/RiskHistoryPage";
+import ReviewQueuePage from "./Pages/active-learning/ReviewQueuePage";
+import ReviewCaseDetailPage from "./Pages/active-learning/ReviewCaseDetailPage";
+import ActiveLearningStatusPage from "./Pages/active-learning/ActiveLearningStatusPage";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
@@ -39,6 +42,17 @@ const App = () => {
             <Route path="/sign-in" element={<SignIn />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/dashboard" element={<DashboardLayout><DashboardPage /></DashboardLayout>} />
+            <Route path="/active-learning/review" element={<ReviewQueuePage />} />
+            <Route
+              path="/active-learning/review/:caseId"
+              element={<ReviewCaseDetailPage />}
+            />
+            <Route
+              path="/active-learning/status"
+              element={<ActiveLearningStatusPage />}
+            />
+            {/* <Route path="/profile" element={<DashboardLayout><ProfilePage /></DashboardLayout>} /> */}
+            {/* <Route path="/dashboard" element={<DashboardLayout><DashboardPage /></DashboardLayout>} />
             <Route path="/patient-profile" element={<DashboardLayout><PatientProfilePage /></DashboardLayout>} />
             <Route path="/lab-entry" element={<DashboardLayout><LabEntryPage /></DashboardLayout>} />
             <Route path="/patient-images" element={<DashboardLayout><PatientImageUploadPage /></DashboardLayout>} />
