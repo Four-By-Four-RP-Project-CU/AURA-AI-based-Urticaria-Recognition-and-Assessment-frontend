@@ -125,6 +125,18 @@ const Header = () => {
             Home
           </Link>
         </Navbar.Link>
+        <Navbar.Link active={path === "/clinician-dashboard"} as={"div"}>
+          <Link
+            to="/clinician-dashboard"
+            className={`text-lg font-semibold ${
+              path === "/clinician-dashboard"
+                ? "text-blue-600 dark:text-purple-400"
+                : "text-gray-700 dark:text-gray-300"
+            } hover:text-blue-600 dark:hover:text-purple-400 transition-colors`}
+          >
+            Clinician Dashboard
+          </Link>
+        </Navbar.Link>
         <Navbar.Link active={path === "/about"} as={"div"}>
           <Link
             to="/about"
