@@ -27,43 +27,150 @@ const ReviewQueuePage = () => {
   const [activePanel, setActivePanel] = useState("queue");
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [cases, setCases] = useState(mockActiveLearningCases);
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadError, setLoadError] = useState("");
   const navigate = useNavigate();
+
+  const getConfidencePercent = (item) => {
+    if (typeof item.overallConfidenceScore === "number") {
+      return Math.round(item.overallConfidenceScore * 100);
+    }
+    if (typeof item.confidence === "number") {
+      return Math.round(item.confidence <= 1 ? item.confidence * 100 : item.confidence);
+    }
+    return null;
+  };
+
+  const getUncertaintyTag = (item) => {
+    const confidencePercent = getConfidencePercent(item);
+    if (confidencePercent === null) return "Unknown";
+    return getUncertaintyLevel(confidencePercent).toUpperCase();
+  };
+
+  const getUncertaintyLabel = (item) => {
+    const tag = getUncertaintyTag(item);
+    if (tag === "Unknown") return tag;
+    return tag[0] + tag.slice(1).toLowerCase();
+  };
+
+  const formatDate = (value) => {
+    if (!value) return "—";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleDateString();
+  };
+
+  const formatPercent = (value) => {
+    if (typeof value !== "number") return "—";
+    const normalized = value <= 1 ? value * 100 : value;
+    return `${Math.round(normalized)}%`;
+  };
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const baseUrl =
+      import.meta.env.VITE_API_BASE_URL || "http://localhost:8081";
+    const params = new URLSearchParams();
+
+    if (uncertaintyFilter !== "ALL") {
+      params.set("uncertaintyLevel", uncertaintyFilter);
+    }
+    if (sortBy === "LOWEST_CONFIDENCE") {
+      params.set("lowestConfidenceFirst", "true");
+      params.set("latestFirst", "false");
+    } else {
+      params.set("lowestConfidenceFirst", "false");
+      params.set("latestFirst", "true");
+    }
+
+    const requestUrl = `${baseUrl}/api/v1/dashboard-review${
+      params.toString() ? `?${params.toString()}` : ""
+    }`;
+
+    const fetchCases = async () => {
+      setIsLoading(true);
+      setLoadError("");
+      try {
+        const headers = {};
+        const basicAuth = import.meta.env.VITE_DASHBOARD_REVIEW_BASIC_AUTH;
+        if (basicAuth) {
+          headers.Authorization = `Basic ${basicAuth}`;
+        }
+        const response = await fetch(requestUrl, {
+          headers,
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          throw new Error(`Request failed with ${response.status}`);
+        }
+        const payload = await response.json();
+        const nextCases = Array.isArray(payload)
+          ? payload
+          : payload?.records || payload?.data || payload?.cases || [];
+        setCases(nextCases);
+      } catch (error) {
+        if (error.name !== "AbortError") {
+          setLoadError(error.message || "Failed to load review queue.");
+          setCases([]);
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchCases();
+
+    return () => controller.abort();
+  }, [uncertaintyFilter, sortBy]);
 
   const mergedCases = useMemo(() => {
     const overrides = JSON.parse(
       window.localStorage.getItem(OVERRIDES_KEY) || "{}"
     );
-    return mockActiveLearningCases.map((item) => ({
-      ...item,
-      ...overrides[item.caseId],
-    }));
-  }, []);
+    return cases.map((item) => {
+      const override = overrides[item.caseId];
+      const safeOverride =
+        override && typeof override === "object" && !Array.isArray(override)
+          ? override
+          : {};
+      return {
+        ...item,
+        ...safeOverride,
+        caseId: item.caseId,
+      };
+    });
+  }, [cases]);
 
   const visibleCases = useMemo(() => {
-    let filtered = mergedCases.filter(
-      (item) => item.confidence < item.threshold
-    );
+    let filtered = mergedCases;
 
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
       filtered = filtered.filter(
         (item) =>
           item.caseId.toLowerCase().includes(term) ||
-          item.predictedLabel.toLowerCase().includes(term)
+          (item.urticariaType || "").toLowerCase().includes(term) ||
+          (item.predictedDrug || "").toLowerCase().includes(term) ||
+          (item.predictedLabel || "").toLowerCase().includes(term)
       );
     }
 
     if (uncertaintyFilter !== "ALL") {
       filtered = filtered.filter(
-        (item) => getUncertaintyLevel(item.confidence) === uncertaintyFilter
+        (item) => getUncertaintyTag(item) === uncertaintyFilter
       );
     }
 
     if (sortBy === "LOWEST_CONFIDENCE") {
-      filtered = [...filtered].sort((a, b) => a.confidence - b.confidence);
+      filtered = [...filtered].sort((a, b) => {
+        const aConfidence = getConfidencePercent(a) ?? 0;
+        const bConfidence = getConfidencePercent(b) ?? 0;
+        return aConfidence - bConfidence;
+      });
     } else {
       filtered = [...filtered].sort(
-        (a, b) => new Date(b.date) - new Date(a.date)
+        (a, b) => new Date(b.visitDate || b.date) - new Date(a.visitDate || a.date)
       );
     }
 
@@ -151,7 +258,15 @@ const ReviewQueuePage = () => {
   const getStatusColor = (status) => {
     if (status === "REVIEWED") return "success";
     if (status === "RETRAINED") return "info";
+    if (status === "NEED_REVIEW" || status === "NEEDS_REVIEW") return "warning";
     return "warning";
+  };
+
+  const getRiskColor = (riskLevel) => {
+    if (riskLevel === "HIGH") return "failure";
+    if (riskLevel === "MEDIUM") return "warning";
+    if (riskLevel === "LOW") return "success";
+    return "gray";
   };
 
   const toggleRow = (caseId) => {
@@ -228,7 +343,7 @@ const ReviewQueuePage = () => {
                   theme={{
                     field: { input: { withAddon: { off: "rounded-full" } } },
                   }}
-                  placeholder="Enter Case ID or Label"
+                  placeholder="Enter Case ID, Type, or Drug"
                   value={searchTerm}
                   onChange={(event) => setSearchTerm(event.target.value)}
                 />
@@ -238,8 +353,9 @@ const ReviewQueuePage = () => {
                     onChange={setUncertaintyFilter}
                     options={[
                       { value: "ALL", label: "All Uncertainty Levels" },
-                      { value: "High", label: "High Uncertainty" },
-                      { value: "Medium", label: "Medium Uncertainty" },
+                      { value: "HIGH", label: "High Uncertainty" },
+                      { value: "MEDIUM", label: "Medium Uncertainty" },
+                      { value: "LOW", label: "Low Uncertainty" },
                     ]}
                   />
                   <Dropdown
@@ -255,6 +371,16 @@ const ReviewQueuePage = () => {
                   {visibleCases.length} case
                   {visibleCases.length === 1 ? "" : "s"}
                 </div>
+                {isLoading && (
+                  <div className="text-xs text-slate-500">
+                    Loading review queue from API...
+                  </div>
+                )}
+                {loadError && (
+                  <div className="text-xs text-rose-600">
+                    {loadError} Showing local fallback data.
+                  </div>
+                )}
               </div>
             </div>
 
@@ -268,6 +394,11 @@ const ReviewQueuePage = () => {
               <div className="space-y-3">
                 {paginatedCases.map((item) => {
                   const isSelected = item.caseId === selectedCaseId;
+                  const confidencePercent = getConfidencePercent(item);
+                  const uncertaintyLabel = getUncertaintyLabel(item);
+                  const primaryRisk = item.risks?.length
+                    ? [...item.risks].sort((a, b) => b.riskScore - a.riskScore)[0]
+                    : null;
                   return (
                     <div
                       key={item.caseId}
@@ -287,32 +418,55 @@ const ReviewQueuePage = () => {
                             {item.caseId}
                           </p>
                           <p className="text-xs text-slate-500">
-                            {item.predictedLabel}
+                            {item.urticariaType || item.predictedLabel || "—"}
                           </p>
                           <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-500">
-                            <span>{item.age} / {item.sex}</span>
+                            <span>
+                              {item.patientAge ?? item.age ?? "—"} / {item.patientGender ?? item.sex ?? "—"}
+                            </span>
                             <span>•</span>
-                            <span>{item.date}</span>
+                            <span>{formatDate(item.visitDate || item.date)}</span>
+                          </div>
+                          <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-500">
+                            <span>{item.hospital || "—"}</span>
+                            {item.predictedDrug && (
+                              <>
+                                <span>•</span>
+                                <span>{item.predictedDrug}</span>
+                              </>
+                            )}
                           </div>
                         </div>
                         <div className="flex flex-col items-end gap-2">
                           <span className="text-sm font-semibold text-slate-900">
-                            {item.confidence}%
+                            {confidencePercent !== null ? `${confidencePercent}%` : "—"}
+                          </span>
+                          <span className="text-xs text-slate-500">
+                            Drug {formatPercent(item.confidencePredictedDrugStep)}
                           </span>
                           <Badge
                             color={
-                              getUncertaintyLevel(item.confidence) === "High"
+                              uncertaintyLabel === "High"
                                 ? "failure"
-                                : "warning"
+                                : uncertaintyLabel === "Medium"
+                                  ? "warning"
+                                  : uncertaintyLabel === "Low"
+                                    ? "success"
+                                    : "gray"
                             }
                           >
-                            {getUncertaintyLevel(item.confidence)}
+                            {uncertaintyLabel}
                           </Badge>
+                          {primaryRisk && (
+                            <Badge color={getRiskColor(primaryRisk.riskLevel)}>
+                              {primaryRisk.riskType.replaceAll("_", " ")}
+                            </Badge>
+                          )}
                         </div>
                       </button>
                       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 px-3 py-2">
-                        <Badge color={getStatusColor(item.status)}>
-                          {item.status}
+                        <Badge color={getStatusColor(item.clinicianFinalStatus || item.status)}>
+                          {item.clinicianFinalStatus || item.status}
                         </Badge>
                         <div className="flex flex-wrap gap-2">
                           <Button
@@ -351,20 +505,50 @@ const ReviewQueuePage = () => {
                                 Hospital
                               </p>
                               <p className="text-sm font-semibold text-slate-900">
-                                {item.hospital}
+                                {item.hospital || "—"}
                               </p>
-                              <p className="mt-1">Symptoms: {item.symptoms}</p>
+                              <p className="mt-1">Symptoms: {item.symptoms || "—"}</p>
+                              <p className="mt-1">
+                                Visit: {formatDate(item.visitDate || item.date)}
+                              </p>
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                <Badge color={item.gradCamAvailable ? "success" : "gray"}>
+                                  Grad-CAM {item.gradCamAvailable ? "Available" : "Missing"}
+                                </Badge>
+                                <Badge color={item.shapAvailable ? "success" : "gray"}>
+                                  SHAP {item.shapAvailable ? "Available" : "Missing"}
+                                </Badge>
+                              </div>
                             </div>
                             <div>
                               <p className="text-[11px] uppercase tracking-wide text-slate-400">
                                 Inference
                               </p>
-                              <p>ID: {item.inferenceId}</p>
-                              <p>Run: {new Date(item.runAt).toLocaleString()}</p>
-                              <p>Model: {item.modelName}</p>
-                              <p>Threshold: {item.threshold}%</p>
+                              <p>UCT Score: {item.uct?.totalScore ?? "—"}</p>
+                              <p>AECT Score: {item.aect?.totalScore ?? "—"}</p>
+                              <p>Predicted Step: {item.predictedStep || "—"}</p>
+                              <p>Drug Confidence: {formatPercent(item.confidencePredictedDrugStep)}</p>
                             </div>
                           </div>
+                          {item.risks?.length > 0 && (
+                            <div className="mt-3">
+                              <p className="text-[11px] uppercase tracking-wide text-slate-400">
+                                Risks
+                              </p>
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                {item.risks.map((risk) => (
+                                  <Badge key={risk.riskType} color={getRiskColor(risk.riskLevel)}>
+                                    {risk.riskType.replaceAll("_", " ")} ({Math.round(risk.riskScore * 100)}%)
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {item.recommendations && (
+                            <p className="mt-3 text-sm text-slate-600">
+                              Recommendation: {item.recommendations}
+                            </p>
+                          )}
                         </div>
                       )}
                     </div>
@@ -503,19 +687,31 @@ const ReviewQueuePage = () => {
                       <div className="flex items-center justify-between">
                         <span>Patient</span>
                         <span className="font-semibold text-slate-900">
-                          {selectedCase.age} / {selectedCase.sex}
+                          {selectedCase.patientAge ?? selectedCase.age ?? "—"} / {selectedCase.patientGender ?? selectedCase.sex ?? "—"}
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span>Hospital</span>
                         <span className="font-semibold text-slate-900">
-                          {selectedCase.hospital}
+                          {selectedCase.hospital || "—"}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span>Visit Date</span>
+                        <span className="font-semibold text-slate-900">
+                          {formatDate(selectedCase.visitDate || selectedCase.date)}
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span>Symptoms</span>
                         <span className="font-semibold text-slate-900">
-                          {selectedCase.symptoms}
+                          {selectedCase.symptoms || "—"}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span>Urticaria Type</span>
+                        <span className="font-semibold text-slate-900">
+                          {selectedCase.urticariaType || selectedCase.predictedLabel || "—"}
                         </span>
                       </div>
                     </div>
@@ -528,34 +724,27 @@ const ReviewQueuePage = () => {
 
                 <div className="rounded-xl border border-slate-200 bg-white p-4">
                   <p className="text-xs uppercase tracking-wide text-slate-400">
-                    Prediction & Confidence
+                    Treatment Model Output
                   </p>
                   {selectedCase ? (
                     <div className="mt-3 space-y-2 text-sm text-slate-600">
                       <div className="flex items-center justify-between">
-                        <span>Prediction</span>
+                        <span>Predicted Drug</span>
                         <span className="font-semibold text-slate-900">
-                          {selectedCase.predictedLabel}
+                          {selectedCase.predictedDrug || selectedCase.predictedLabel || "—"}
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span>Confidence</span>
+                        <span>Drug Confidence</span>
                         <span className="font-semibold text-slate-900">
-                          {selectedCase.confidence}%
+                          {formatPercent(selectedCase.confidencePredictedDrugStep)}
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span>Uncertainty</span>
-                        <Badge
-                          color={
-                            getUncertaintyLevel(selectedCase.confidence) ===
-                            "High"
-                              ? "failure"
-                              : "warning"
-                          }
-                        >
-                          {getUncertaintyLevel(selectedCase.confidence)}
-                        </Badge>
+                        <span>Predicted Step</span>
+                        <span className="font-semibold text-slate-900">
+                          {selectedCase.predictedStep || "—"}
+                        </span>
                       </div>
                     </div>
                   ) : (
@@ -568,26 +757,36 @@ const ReviewQueuePage = () => {
 
               <div className="rounded-xl border border-slate-200 bg-white p-4">
                 <p className="text-xs uppercase tracking-wide text-slate-400">
-                  Inference Details
+                  Risk Model Output
                 </p>
                 {selectedCase ? (
                   <div className="mt-3 grid gap-3 text-sm text-slate-600 sm:grid-cols-2">
                     <div>
                       <p className="text-xs uppercase tracking-wide text-slate-400">
-                        Model
+                        Confidence & Type
                       </p>
                       <p className="font-semibold text-slate-900">
-                        {selectedCase.modelName} {selectedCase.modelVersion}
+                        Overall {formatPercent(selectedCase.overallConfidenceScore)}
                       </p>
-                      <p className="mt-1">Run: {new Date(selectedCase.runAt).toLocaleString()}</p>
+                      <p className="mt-1">
+                        Type: {selectedCase.urticariaType || "—"}
+                      </p>
+                      <p className="mt-1">
+                        Uncertainty: {getUncertaintyLabel(selectedCase)}
+                      </p>
                     </div>
                     <div>
                       <p className="text-xs uppercase tracking-wide text-slate-400">
-                        Threshold & Status
+                        Status & Notes
                       </p>
-                      <p className="mt-1">Threshold: {selectedCase.threshold}%</p>
-                      <Badge color={getStatusColor(selectedCase.status)}>
-                        {selectedCase.status}
+                      <p className="mt-1">
+                        Status: {selectedCase.clinicianFinalStatus || selectedCase.status || "—"}
+                      </p>
+                      <p className="mt-1">
+                        Recommendation: {selectedCase.recommendations || "—"}
+                      </p>
+                      <Badge color={getStatusColor(selectedCase.clinicianFinalStatus || selectedCase.status)}>
+                        {selectedCase.clinicianFinalStatus || selectedCase.status || "—"}
                       </Badge>
                     </div>
                   </div>

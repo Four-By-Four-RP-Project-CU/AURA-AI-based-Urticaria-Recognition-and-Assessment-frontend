@@ -26,42 +26,148 @@ const ReviewCaseDetailPage = () => {
   const [correctedLabel, setCorrectedLabel] = useState("");
   const [comment, setComment] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadError, setLoadError] = useState("");
+
+  const getConfidencePercent = (item) => {
+    if (typeof item?.overallConfidenceScore === "number") {
+      return Math.round(item.overallConfidenceScore * 100);
+    }
+    if (typeof item?.confidence === "number") {
+      return Math.round(item.confidence <= 1 ? item.confidence * 100 : item.confidence);
+    }
+    return null;
+  };
+
+  const getUncertaintyLabel = (item) => {
+    const confidence = getConfidencePercent(item);
+    if (confidence === null) return "Unknown";
+    return getUncertaintyLevel(confidence);
+  };
+
+  const formatDate = (value) => {
+    if (!value) return "—";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleDateString();
+  };
+
+  const formatDateTime = (value) => {
+    if (!value) return "—";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleString();
+  };
+
+  const toNumber = (value) => {
+    if (typeof value === "number") return value;
+    if (typeof value === "string" && value.trim() !== "") {
+      const parsed = Number(value);
+      return Number.isNaN(parsed) ? null : parsed;
+    }
+    return null;
+  };
+
+  const formatPercent = (value) => {
+    const numericValue = toNumber(value);
+    if (numericValue === null) return "—";
+    const normalized = numericValue <= 1 ? numericValue * 100 : numericValue;
+    return `${Math.round(normalized)}%`;
+  };
+
+  const getProgressValue = (value) => {
+    const numericValue = toNumber(value);
+    if (numericValue === null) return 0;
+    const normalized = numericValue <= 1 ? numericValue * 100 : numericValue;
+    return Math.min(Math.max(Math.round(normalized), 0), 100);
+  };
+
+  const getStatusColor = (status) => {
+    if (status === "REVIEWED") return "success";
+    if (status === "RETRAINED") return "info";
+    if (status === "NEED_REVIEW" || status === "NEEDS_REVIEW") return "warning";
+    return "warning";
+  };
+
+  const getRiskColor = (riskLevel) => {
+    if (riskLevel === "HIGH") return "failure";
+    if (riskLevel === "MEDIUM") return "warning";
+    if (riskLevel === "LOW") return "success";
+    return "gray";
+  };
 
   useEffect(() => {
-    const baseCase = mockActiveLearningCases.find(
-      (item) => item.caseId === caseId
-    );
-    if (!baseCase) return;
-    const overrides = JSON.parse(
-      window.localStorage.getItem(OVERRIDES_KEY) || "{}"
-    );
-    const merged = { ...baseCase, ...overrides[caseId] };
-    setCaseData(merged);
+    const controller = new AbortController();
+    const baseUrl =
+      import.meta.env.VITE_API_BASE_URL || "http://localhost:8081";
+    const requestUrl = `${baseUrl}/api/v1/dashboard-review`;
+
+    const fetchCase = async () => {
+      setIsLoading(true);
+      setLoadError("");
+      try {
+        const headers = {};
+        const basicAuth = import.meta.env.VITE_DASHBOARD_REVIEW_BASIC_AUTH;
+        if (basicAuth) {
+          headers.Authorization = `Basic ${basicAuth}`;
+        }
+        const response = await fetch(requestUrl, {
+          headers,
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          throw new Error(`Request failed with ${response.status}`);
+        }
+        const payload = await response.json();
+        const records = Array.isArray(payload)
+          ? payload
+          : payload?.records || payload?.data || payload?.cases || [];
+        const baseCase = records.find((item) => item.caseId === caseId);
+        if (!baseCase) {
+          setCaseData(null);
+          return;
+        }
+        const overrides = JSON.parse(
+          window.localStorage.getItem(OVERRIDES_KEY) || "{}"
+        );
+        const merged = { ...baseCase, ...(overrides[caseId] || {}) };
+        setCaseData(merged);
+      } catch (error) {
+        if (error.name !== "AbortError") {
+          setLoadError(error.message || "Failed to load case.");
+          setCaseData(null);
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchCase();
 
     const storedFeedback = JSON.parse(
       window.localStorage.getItem(FEEDBACK_KEY) || "[]"
     );
     setFeedbackEntries(storedFeedback.filter((entry) => entry.caseId === caseId));
+
+    return () => controller.abort();
   }, [caseId]);
 
   const reviewerName = "Dr. Perera";
 
   const decisionStatus = useMemo(() => {
-    if (!caseData) return "NEEDS_REVIEW";
-    if (caseData.confidence < caseData.threshold) return "NEEDS_REVIEW";
-    return "AUTO_ACCEPTED";
+    if (!caseData) return "NEED_REVIEW";
+    if (caseData.clinicianFinalStatus) return caseData.clinicianFinalStatus;
+    const confidence = getConfidencePercent(caseData);
+    if (confidence === null) return "NEED_REVIEW";
+    if (caseData.threshold) {
+      return confidence < caseData.threshold ? "NEED_REVIEW" : "AUTO_ACCEPTED";
+    }
+    return "NEED_REVIEW";
   }, [caseData]);
 
-  const decisionRule =
-    "Flag predictions with confidence below the clinician review threshold.";
-
-  const decisionReason = caseData
-    ? `Top prediction confidence is ${caseData.confidence}%, which is ${
-        caseData.confidence < caseData.threshold ? "below" : "above"
-      } the ${caseData.threshold}% threshold.`
-    : "";
-
-  const correctedOptions = caseData ? caseData.topK.map((item) => item.label) : [];
+  const correctedOptions = caseData?.topK
+    ? caseData.topK.map((item) => item.label)
+    : [];
 
   const reviewedCount = useMemo(() => {
     const storedFeedback = JSON.parse(
@@ -121,6 +227,36 @@ const ReviewCaseDetailPage = () => {
     toast.info("Retraining simulated and model updated.");
   };
 
+  if (isLoading) {
+    return (
+      <DashboardShell
+        header={
+          <div className="mb-6 flex items-center gap-3">
+            <Button
+              color="gray"
+              onClick={() => navigate("/active-learning/review")}
+              aria-label="Back to queue"
+            >
+              <FaArrowLeft />
+            </Button>
+            <div>
+              <p className="text-xs uppercase tracking-[0.3em] text-slate-500">
+                Case Detail
+              </p>
+              <h1 className="text-2xl font-semibold text-slate-900">
+                Loading Case
+              </h1>
+            </div>
+          </div>
+        }
+      >
+        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <p className="text-slate-700">Loading case details...</p>
+        </div>
+      </DashboardShell>
+    );
+  }
+
   if (!caseData) {
     return (
       <DashboardShell
@@ -146,7 +282,7 @@ const ReviewCaseDetailPage = () => {
       >
         <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
           <p className="text-slate-700">
-            Case not found. Return to the review queue.
+            {loadError ? `${loadError} ` : ""}Case not found. Return to the review queue.
           </p>
           <Button
             className="mt-4"
@@ -181,8 +317,8 @@ const ReviewCaseDetailPage = () => {
           <h1 className="text-3xl font-semibold text-slate-900">
             {caseData.caseId}
           </h1>
-          <Badge color={caseData.status === "RETRAINED" ? "success" : "info"}>
-            {caseData.status}
+          <Badge color={getStatusColor(caseData.clinicianFinalStatus || caseData.status)}>
+            {caseData.clinicianFinalStatus || caseData.status || "—"}
           </Badge>
         </div>
         {/* <div className="rounded-xl bg-white p-2">
@@ -223,7 +359,7 @@ const ReviewCaseDetailPage = () => {
           <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
             <p className="text-sm text-slate-500">Clinical Summary</p>
             <h2 className="text-xl font-semibold text-slate-900">
-              {caseData.hospital}
+              {caseData.hospital || "—"}
             </h2>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <div>
@@ -236,87 +372,82 @@ const ReviewCaseDetailPage = () => {
                 <p className="text-xs uppercase tracking-wide text-slate-400">
                   Visit Date
                 </p>
-                <p className="text-sm text-slate-700">{caseData.date}</p>
+                <p className="text-sm text-slate-700">
+                  {formatDate(caseData.visitDate || caseData.date)}
+                </p>
               </div>
               <div>
                 <p className="text-xs uppercase tracking-wide text-slate-400">
                   Patient
                 </p>
                 <p className="text-sm text-slate-700">
-                  {caseData.age} / {caseData.sex}
+                  {caseData.patientAge ?? caseData.age ?? "—"} / {caseData.patientGender ?? caseData.sex ?? "—"}
                 </p>
               </div>
               <div>
                 <p className="text-xs uppercase tracking-wide text-slate-400">
                   Symptoms
                 </p>
-                <p className="text-sm text-slate-700">{caseData.symptoms}</p>
+                <p className="text-sm text-slate-700">{caseData.symptoms || "—"}</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-400">
+                  Urticaria Type
+                </p>
+                <p className="text-sm text-slate-700">
+                  {caseData.urticariaType || caseData.predictedLabel || "—"}
+                </p>
               </div>
             </div>
           </div>
 
           <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-            <p className="text-sm text-slate-500">Prediction & Confidence</p>
+            <p className="text-sm text-slate-500">Treatment Model Output</p>
             <h2 className="text-xl font-semibold text-slate-900">
-              {caseData.predictedLabel}
+              {caseData.predictedDrug || caseData.predictedLabel || "—"}
             </h2>
             <div className="mt-4 grid gap-3">
               <div className="flex items-center justify-between text-sm text-slate-600">
-                <span>Confidence</span>
+                <span>Drug Confidence</span>
                 <span className="font-semibold text-slate-900">
-                  {caseData.confidence}%
+                  {formatPercent(caseData.confidencePredictedDrugStep)}
                 </span>
               </div>
               <Progress
-                progress={caseData.confidence}
-                color={caseData.confidence >= caseData.threshold ? "teal" : "warning"}
+                progress={getProgressValue(caseData.confidencePredictedDrugStep)}
+                color="cyan"
                 size="sm"
               />
-              <div className="flex items-center justify-between">
-                <p className="text-sm text-slate-600">Uncertainty</p>
-                <Badge
-                  color={
-                    getUncertaintyLevel(caseData.confidence) === "High"
-                      ? "failure"
-                      : "warning"
-                  }
-                >
-                  {getUncertaintyLevel(caseData.confidence)}
-                </Badge>
+              <div className="flex items-center justify-between text-sm text-slate-600">
+                <span>Predicted Step</span>
+                <span className="font-semibold text-slate-900">
+                  {caseData.predictedStep || "—"}
+                </span>
               </div>
-              {caseData.confidence < caseData.threshold && (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-                  Confidence below {caseData.threshold}% threshold. Requires
-                  clinician review.
-                </div>
-              )}
+              <div className="flex items-center justify-between text-sm text-slate-600">
+                <span>Urticaria Type</span>
+                <span className="font-semibold text-slate-900">
+                  {caseData.urticariaType || "—"}
+                </span>
+              </div>
             </div>
           </div>
 
           <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-sm text-slate-500">
-                  Pre-trained Model Decision
-                </p>
+                <p className="text-sm text-slate-500">Risk Model Output</p>
                 <h2 className="text-xl font-semibold text-slate-900">
-                  Explainability
+                  Overall Confidence & Risks
                 </h2>
                 <p className="text-sm text-slate-600">
-                  {caseData.modelName} {caseData.modelVersion} •{" "}
-                  {new Date(caseData.runAt).toLocaleString()}
+                  Updated {formatDateTime(caseData.updatedAt || caseData.createdAt)}
                 </p>
               </div>
               <Badge
-                color={
-                  decisionStatus === "AUTO_ACCEPTED"
-                    ? "success"
-                    : decisionStatus === "NEEDS_REVIEW"
-                    ? "warning"
-                    : "failure"
-                }
+                color={getStatusColor(caseData.clinicianFinalStatus || decisionStatus)}
               >
-                {decisionStatus}
+                {caseData.clinicianFinalStatus || decisionStatus}
               </Badge>
             </div>
 
@@ -324,49 +455,109 @@ const ReviewCaseDetailPage = () => {
               <div className="lg:col-span-1">
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
                   <p className="text-sm font-semibold text-slate-800">
-                    Decision Rule
+                    Model Summary
                   </p>
-                  <p className="mt-2 text-sm text-slate-600">{decisionRule}</p>
+                  <p className="mt-2 text-sm text-slate-600">
+                    Overall Confidence: {formatPercent(caseData.overallConfidenceScore)}
+                  </p>
+                  <p className="mt-2 text-sm text-slate-600">
+                    Uncertainty: {getUncertaintyLabel(caseData)}
+                  </p>
+                  <p className="mt-2 text-sm text-slate-600">
+                    Type: {caseData.urticariaType || "—"}
+                  </p>
                   <p className="mt-3 text-sm text-slate-600">
-                    Reason: {decisionReason}
+                    Recommendation: {caseData.recommendations || "—"}
                   </p>
                 </div>
                 <div className="mt-4 rounded-lg border border-slate-200 bg-white p-4">
-                  <p className="text-sm text-slate-500">Threshold</p>
-                  <div className="mt-2 flex items-center justify-between text-sm text-slate-600">
-                    <span>Confidence Threshold</span>
-                    <span className="font-semibold text-slate-900">
-                      {caseData.threshold}%
-                    </span>
+                  <p className="text-sm text-slate-500">Assessment Scores</p>
+                  <div className="mt-2 space-y-2 text-sm text-slate-600">
+                    <div className="flex items-center justify-between">
+                      <span>UCT Total</span>
+                      <span className="font-semibold text-slate-900">
+                        {caseData.uct?.totalScore ?? "—"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>AECT Total</span>
+                      <span className="font-semibold text-slate-900">
+                        {caseData.aect?.totalScore ?? "—"}
+                      </span>
+                    </div>
                   </div>
-                  <Progress
-                    progress={caseData.confidence}
-                    color={caseData.confidence >= caseData.threshold ? "teal" : "warning"}
-                    size="sm"
-                  />
                 </div>
               </div>
 
               <div className="lg:col-span-2">
-                <p className="text-sm text-slate-500">Top-K Predictions</p>
-                <div className="mt-3 space-y-3">
-                  {caseData.topK.map((item) => (
-                    <div
-                      key={item.label}
-                      className="rounded-lg border border-slate-200 bg-white p-4"
-                    >
-                      <div className="flex items-center justify-between text-sm text-slate-600">
-                        <span className="font-semibold text-slate-900">
-                          {item.label}
-                        </span>
-                        <span className="font-semibold text-slate-900">
-                          {item.probability}%
-                        </span>
-                      </div>
-                      <Progress progress={item.probability} color="info" size="sm" />
-                    </div>
-                  ))}
+                <p className="text-sm text-slate-500">Risk Flags</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {caseData.risks?.length ? (
+                    caseData.risks.map((risk) => (
+                      <Badge key={risk.riskType} color={getRiskColor(risk.riskLevel)}>
+                        {risk.riskType.replaceAll("_", " ")} ({Math.round(risk.riskScore * 100)}%)
+                      </Badge>
+                    ))
+                  ) : (
+                    <span className="text-sm text-slate-500">No risks reported.</span>
+                  )}
                 </div>
+                <p className="mt-4 text-sm text-slate-500">SHAP Scores</p>
+                <div className="mt-3 space-y-3">
+                  {caseData.shapScores?.length ? (
+                    caseData.shapScores.map((item) => (
+                      <div
+                        key={item.feature}
+                        className="rounded-lg border border-slate-200 bg-white p-4"
+                      >
+                        <div className="flex items-center justify-between text-sm text-slate-600">
+                          <span className="font-semibold text-slate-900">
+                            {item.feature}
+                          </span>
+                          <span className="font-semibold text-slate-900">
+                            {formatPercent(item.contribution)}
+                          </span>
+                        </div>
+                        <Progress
+                          progress={Math.round((item.contribution || 0) * 100)}
+                          color="cyan"
+                          size="sm"
+                        />
+                      </div>
+                    ))
+                  ) : (
+                    <div className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-500">
+                      No SHAP scores available.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-4 lg:grid-cols-2">
+              <div className="rounded-lg border border-slate-200 bg-white p-4">
+                <p className="text-sm text-slate-500">Clinical Image</p>
+                {caseData.images ? (
+                  <img
+                    src={caseData.images}
+                    alt="Clinical"
+                    className="mt-3 w-full rounded-lg object-cover"
+                  />
+                ) : (
+                  <p className="mt-3 text-sm text-slate-500">No image available.</p>
+                )}
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-white p-4">
+                <p className="text-sm text-slate-500">Grad-CAM Heatmap</p>
+                {caseData.gradCamHeatMapImage ? (
+                  <img
+                    src={caseData.gradCamHeatMapImage}
+                    alt="Grad-CAM heatmap"
+                    className="mt-3 w-full rounded-lg object-cover"
+                  />
+                ) : (
+                  <p className="mt-3 text-sm text-slate-500">No heatmap available.</p>
+                )}
               </div>
             </div>
           </div>
@@ -413,8 +604,8 @@ const ReviewCaseDetailPage = () => {
 
           <RetrainingSimulationPanel
             canRetrain={reviewedCount > 0}
-            currentVersion={caseData.modelVersion}
-            currentConfidence={caseData.confidence}
+            currentVersion={caseData.modelVersion || "v1.0"}
+            currentConfidence={getConfidencePercent(caseData) ?? 0}
             onComplete={handleRetrainComplete}
           />
         </div>
@@ -430,63 +621,109 @@ const ReviewCaseDetailPage = () => {
                 <div className="flex items-center justify-between">
                   <span>Hospital</span>
                   <span className="font-semibold text-slate-900">
-                    {caseData.hospital}
+                    {caseData.hospital || "—"}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span>Visit Date</span>
                   <span className="font-semibold text-slate-900">
-                    {caseData.date}
+                    {formatDate(caseData.visitDate || caseData.date)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span>Patient</span>
                   <span className="font-semibold text-slate-900">
-                    {caseData.age} / {caseData.sex}
+                    {caseData.patientAge ?? caseData.age ?? "—"} / {caseData.patientGender ?? caseData.sex ?? "—"}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span>Symptoms</span>
                   <span className="font-semibold text-slate-900">
-                    {caseData.symptoms}
+                    {caseData.symptoms || "—"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Urticaria Type</span>
+                  <span className="font-semibold text-slate-900">
+                    {caseData.urticariaType || caseData.predictedLabel || "—"}
                   </span>
                 </div>
               </div>
             </div>
 
             <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-              <p className="text-sm text-slate-500">Confidence Snapshot</p>
-              <div className="mt-3 space-y-2 text-sm text-slate-600">
-                <div className="flex items-center justify-between">
-                  <span>Model</span>
-                  <span className="font-semibold text-slate-900">
-                    {caseData.modelVersion}
-                  </span>
+              <p className="text-sm text-slate-500">Model Snapshot</p>
+              <div className="mt-3 space-y-4 text-sm text-slate-600">
+                <div className="rounded-lg border border-slate-200 bg-white p-3">
+                  <p className="text-xs uppercase tracking-wide text-slate-400">
+                    Treatment Model
+                  </p>
+                  <div className="mt-2 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span>Predicted Drug</span>
+                      <span className="font-semibold text-slate-900">
+                        {caseData.predictedDrug || caseData.predictedLabel || "—"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>Predicted Step</span>
+                      <span className="font-semibold text-slate-900">
+                        {caseData.predictedStep || "—"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>Drug Confidence</span>
+                      <span className="font-semibold text-slate-900">
+                        {formatPercent(caseData.confidencePredictedDrugStep)}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span>Confidence</span>
-                  <span className="font-semibold text-slate-900">
-                    {caseData.confidence}%
-                  </span>
+                <div className="rounded-lg border border-slate-200 bg-white p-3">
+                  <p className="text-xs uppercase tracking-wide text-slate-400">
+                    Risk Model
+                  </p>
+                  <div className="mt-2 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span>Overall Confidence</span>
+                      <span className="font-semibold text-slate-900">
+                        {formatPercent(caseData.overallConfidenceScore)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>Uncertainty</span>
+                      <span className="font-semibold text-slate-900">
+                        {getUncertaintyLabel(caseData)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>Type</span>
+                      <span className="font-semibold text-slate-900">
+                        {caseData.urticariaType || "—"}
+                      </span>
+                    </div>
+                    <Progress
+                      progress={getConfidencePercent(caseData) ?? 0}
+                      color={getUncertaintyLabel(caseData) === "High" ? "warning" : "teal"}
+                      size="sm"
+                    />
+                  </div>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span>Threshold</span>
-                  <span className="font-semibold text-slate-900">
-                    {caseData.threshold}%
-                  </span>
+                <div className="flex flex-wrap gap-2">
+                  <Badge color={caseData.gradCamAvailable ? "success" : "gray"}>
+                    Grad-CAM {caseData.gradCamAvailable ? "Available" : "Missing"}
+                  </Badge>
+                  <Badge color={caseData.shapAvailable ? "success" : "gray"}>
+                    SHAP {caseData.shapAvailable ? "Available" : "Missing"}
+                  </Badge>
                 </div>
-                <Progress
-                  progress={caseData.confidence}
-                  color={caseData.confidence >= caseData.threshold ? "teal" : "warning"}
-                  size="sm"
-                />
               </div>
             </div>
 
             <ActiveLearningStepsSidebar
-              isFlagged={caseData.confidence < caseData.threshold}
+              isFlagged={decisionStatus === "NEED_REVIEW"}
               hasFeedback={feedbackEntries.length > 0}
-              caseStatus={caseData.status}
+              caseStatus={caseData.clinicianFinalStatus || caseData.status}
             />
           </div>
         </div>
