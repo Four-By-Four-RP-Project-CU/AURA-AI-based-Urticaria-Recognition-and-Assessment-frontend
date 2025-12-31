@@ -28,6 +28,8 @@ import ActiveLearningStatusPage from "./Pages/active-learning/ActiveLearningStat
 import ModelRegistryPage from "./Pages/ModelRegistryPage"
 import AdminReviewQueuePage from "./Pages/ReviewQueuePage"
 import DeveloperIntegrationGuide from "./Pages/DeveloperIntegrationGuide";
+import ClinicianDashboard from "./Pages/ClinicianDashboard";
+import ClinicianPatientDetail from "./Pages/ClinicianPatientDetail";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
@@ -62,6 +64,16 @@ const App = () => {
             />
              <Route path="/profile" element={<DashboardLayout><ProfilePage /></DashboardLayout>} />
             <Route path="/dashboard" element={<DashboardLayout><DashboardPage /></DashboardLayout>} />
+            <Route
+              path="/clinician-dashboard"
+              element={<ClinicianDashboard />}
+            />
+            <Route
+              path="/clinician-dashboard/:patientId"
+              element={<ClinicianPatientDetail />}
+            />
+            {/* <Route path="/profile" element={<DashboardLayout><ProfilePage /></DashboardLayout>} /> */}
+            {/* <Route path="/dashboard" element={<DashboardLayout><DashboardPage /></DashboardLayout>} />
             <Route path="/patient-profile" element={<DashboardLayout><PatientProfilePage /></DashboardLayout>} />
             <Route path="/lab-entry" element={<DashboardLayout><LabEntryPage /></DashboardLayout>} />
             <Route path="/patient-images" element={<DashboardLayout><PatientImageUploadPage /></DashboardLayout>} />
