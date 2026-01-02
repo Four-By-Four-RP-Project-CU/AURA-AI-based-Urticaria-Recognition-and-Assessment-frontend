@@ -44,6 +44,12 @@ const DatasetStatusPage = () => {
   const coverageRate = Math.round(
     (reviewedCount / mockActiveLearningCases.length) * 100
   );
+  const readinessCardClass =
+    coverageRate >= 80
+      ? "border-emerald-200 bg-emerald-50"
+      : coverageRate >= 50
+        ? "border-sky-200 bg-sky-50"
+        : "border-rose-200 bg-rose-50";
 
   const header = (
     <PageHeader
@@ -92,7 +98,11 @@ const DatasetStatusPage = () => {
           </div>
         </StatCard>
 
-        <StatCard label="Quality Signals" title="Dataset Readiness">
+        <StatCard
+          label="Quality Signals"
+          title="Dataset Readiness"
+          className={readinessCardClass}
+        >
           <div className="mt-4 space-y-3 text-sm text-slate-600">
             <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
               <span>Coverage Rate</span>

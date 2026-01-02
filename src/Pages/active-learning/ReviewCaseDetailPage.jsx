@@ -11,7 +11,6 @@ import { toast } from "react-toastify";
 import { mockActiveLearningCases } from "../../data/mockActiveLearningCases";
 import { getUncertaintyLevel } from "../../utils/activeLearningUtils";
 import ActiveLearningStepsSidebar from "../../components/active-learning/ActiveLearningStepsSidebar";
-import RetrainingSimulationPanel from "../../components/active-learning/RetrainingSimulationPanel";
 import DashboardShell from "../../components/active-learning/DashboardShell";
 import Dropdown from "../../components/active-learning/Dropdown";
 
@@ -216,15 +215,6 @@ const ReviewCaseDetailPage = () => {
     setComment("");
     setErrorMessage("");
     toast.success("Clinician decision saved.");
-  };
-
-  const handleRetrainComplete = (nextVersion, nextConfidence) => {
-    updateOverrides({
-      modelVersion: nextVersion,
-      confidence: nextConfidence,
-      status: "RETRAINED",
-    });
-    toast.info("Retraining simulated and model updated.");
   };
 
   if (isLoading) {
@@ -602,12 +592,6 @@ const ReviewCaseDetailPage = () => {
             </div>
           </div>
 
-          <RetrainingSimulationPanel
-            canRetrain={reviewedCount > 0}
-            currentVersion={caseData.modelVersion || "v1.0"}
-            currentConfidence={getConfidencePercent(caseData) ?? 0}
-            onComplete={handleRetrainComplete}
-          />
         </div>
 
         <div className="lg:col-span-4">

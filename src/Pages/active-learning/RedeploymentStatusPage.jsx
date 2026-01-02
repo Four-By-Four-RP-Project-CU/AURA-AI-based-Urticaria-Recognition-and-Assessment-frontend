@@ -48,6 +48,11 @@ const RedeploymentStatusPage = () => {
     Math.round((retrainCount / mockActiveLearningCases.length) * 100),
     100
   );
+  const deploymentStatus = {
+    label: "Live",
+    dotClass: "bg-emerald-500",
+    textClass: "text-emerald-700",
+  };
 
   const header = (
     <PageHeader
@@ -77,8 +82,15 @@ const RedeploymentStatusPage = () => {
           <div className="mt-4 space-y-3 text-sm text-slate-600">
             <div className="flex items-center justify-between">
               <span>Current model version</span>
-              <span className="font-semibold text-slate-900">
-                {latestModelVersion}
+              <span className="flex items-center gap-2 font-semibold text-slate-900">
+                <span
+                  className={`h-2.5 w-2.5 animate-pulse rounded-full ${deploymentStatus.dotClass}`}
+                  aria-hidden="true"
+                />
+                <span>{latestModelVersion}</span>
+                <span className={`text-xs font-medium ${deploymentStatus.textClass}`}>
+                  {deploymentStatus.label}
+                </span>
               </span>
             </div>
             <div className="flex items-center justify-between">
