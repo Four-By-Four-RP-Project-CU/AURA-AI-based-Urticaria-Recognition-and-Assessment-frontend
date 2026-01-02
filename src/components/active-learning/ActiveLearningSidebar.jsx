@@ -7,6 +7,7 @@ const ActiveLearningSidebar = () => {
   const links = [
     { label: "Review Queue", to: "/active-learning/review" },
     { label: "Status Overview", to: "/active-learning/status" },
+    { label: "Model Registry", to: "/admin/models" },
   ];
 
   return (
