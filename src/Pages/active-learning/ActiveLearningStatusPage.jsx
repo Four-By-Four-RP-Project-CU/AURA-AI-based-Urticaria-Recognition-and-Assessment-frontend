@@ -11,7 +11,7 @@ import { triggerRetrain } from "../../services/modelsApi";
 
 const FEEDBACK_KEY = "activeLearningFeedback";
 const OVERRIDES_KEY = "activeLearningCaseOverrides";
-const DATASET_MIN_RECORDS = 50;
+const DATASET_MIN_RECORDS = 2;
 const DATASET_MAX_RECORDS = 80;
 
 const ActiveLearningStatusPage = () => {
@@ -22,6 +22,7 @@ const ActiveLearningStatusPage = () => {
   const [retrainSimulationProgress, setRetrainSimulationProgress] = useState(0);
   const [retrainMessage, setRetrainMessage] = useState("");
   const [retrainError, setRetrainError] = useState("");
+  const [currentModel, setCurrentModel] = useState(null);
 
   useEffect(() => {
     try {
@@ -43,6 +44,17 @@ const ActiveLearningStatusPage = () => {
     } catch (error) {
       setCaseOverrides({});
     }
+  }, []);
+
+  useEffect(() => {
+    setCurrentModel({
+      modelVersion: "v1.3.2",
+      status: "DEPLOYED",
+      metrics: {
+        accuracy: 95.6,
+        macro_f1: 93.4,
+      },
+    });
   }, []);
 
   const mergedCases = useMemo(
@@ -117,6 +129,15 @@ const ActiveLearningStatusPage = () => {
     : mockActiveLearningCases[0].confidence;
   const modelAccuracy = Math.min(99, Math.round((latestConfidence + 30) * 10) / 10);
   const modelMacroF1 = Math.min(99, Math.round((latestConfidence + 24) * 10) / 10);
+  const currentModelVersion = currentModel?.modelVersion || latestModelVersion;
+  const currentModelAccuracy =
+    typeof currentModel?.metrics?.accuracy === "number"
+      ? currentModel.metrics.accuracy
+      : modelAccuracy;
+  const currentModelMacroF1 =
+    typeof currentModel?.metrics?.macro_f1 === "number"
+      ? currentModel.metrics.macro_f1
+      : modelMacroF1;
   const retrainProgress = Math.min(
     Math.round((retrainCount / mockActiveLearningCases.length) * 100),
     100
@@ -291,7 +312,7 @@ const ActiveLearningStatusPage = () => {
                     className={`h-2.5 w-2.5 animate-pulse rounded-full ${deploymentStatus.dotClass}`}
                     aria-hidden="true"
                   />
-                  <span>{latestModelVersion}</span>
+                  <span>{currentModelVersion}</span>
                   <span className={`text-xs font-medium ${deploymentStatus.textClass}`}>
                     {deploymentStatus.label}
                   </span>
@@ -300,13 +321,13 @@ const ActiveLearningStatusPage = () => {
               <div className="flex items-center justify-between">
                 <span>Accuracy level</span>
                 <span className="font-semibold text-slate-900">
-                  {modelAccuracy}%
+                  {currentModelAccuracy}%
                 </span>
               </div>
               <div className="flex items-center justify-between">
                 <span>Macro F1 score</span>
                 <span className="font-semibold text-slate-900">
-                  {modelMacroF1}%
+                  {currentModelMacroF1}%
                 </span>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -377,7 +398,7 @@ const ActiveLearningStatusPage = () => {
                     size="sm"
                   />
                   <p className="mt-2 text-xs text-slate-500">
-                    Current model {latestModelVersion} • Confidence target{" "}
+                    Current model {currentModelVersion} • Confidence target{" "}
                     {latestConfidence}%
                   </p>
                 </div>
