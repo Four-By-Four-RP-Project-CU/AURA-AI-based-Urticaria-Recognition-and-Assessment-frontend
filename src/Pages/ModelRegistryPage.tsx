@@ -13,8 +13,7 @@ import StatusPill from "../components/models/StatusPill"
 import FeatureColumnsAccordion from "../components/models/FeatureColumnsAccordion"
 import ModelDetailsDrawer from "../components/models/ModelDetailsDrawer"
 import {
-  getCurrentModel,
-  listModels,
+  getModelRegistryById,
   type ModelInfo,
 } from "../services/modelsApi"
 
@@ -112,21 +111,16 @@ const ModelRegistryPage = () => {
     return models.some((model) => model.status === "RETRAINING")
   }, [currentModel, models])
 
-  const loadModels = async (signal?: AbortSignal) => {
-    const [current, list] = await Promise.all([
-      getCurrentModel(signal),
-      listModels(signal),
-    ])
-    setCurrentModel(current)
-    setModels(list)
+  const loadModels = async () => {
+    setCurrentModel(mockCurrentModel)
+    setModels(mockModels)
   }
 
   const handleRefresh = async () => {
     setRefreshing(true)
     setError(null)
-    const controller = new AbortController()
     try {
-      await loadModels(controller.signal)
+      await loadModels()
     } catch (fetchError) {
       const message = fetchError instanceof Error ? fetchError.message : "Failed to load models"
       setError(message)
@@ -138,12 +132,11 @@ const ModelRegistryPage = () => {
   }
 
   useEffect(() => {
-    const controller = new AbortController()
     const init = async () => {
       setLoading(true)
       setError(null)
       try {
-        await loadModels(controller.signal)
+        await loadModels()
       } catch (fetchError) {
         const message = fetchError instanceof Error ? fetchError.message : "Failed to load models"
         setError(message)
@@ -155,8 +148,6 @@ const ModelRegistryPage = () => {
     }
 
     init()
-
-    return () => controller.abort()
   }, [])
 
   useEffect(() => {
@@ -166,6 +157,18 @@ const ModelRegistryPage = () => {
     }, 5000)
     return () => clearInterval(interval)
   }, [hasRetraining])
+
+  const handleViewDetails = async (model: ModelInfo) => {
+    setDetailsModel(model)
+    if (!model.id) return
+    try {
+      const nextModel = await getModelRegistryById(model.id)
+      setDetailsModel(nextModel)
+    } catch (fetchError) {
+      const message = fetchError instanceof Error ? fetchError.message : "Failed to load model details"
+      setError(message)
+    }
+  }
 
   const header = (
     <PageHeader
@@ -300,7 +303,7 @@ const ModelRegistryPage = () => {
                   </Table.Head>
                     <Table.Body className="divide-y">
                       {models.map((model) => (
-                        <Table.Row key={model.modelVersion}>
+                        <Table.Row key={model.id || model.modelVersion}>
                           <Table.Cell className="font-semibold text-slate-900">
                             {model.modelVersion}
                           </Table.Cell>
@@ -345,7 +348,7 @@ const ModelRegistryPage = () => {
                             <Button
                               color="gray"
                               size="xs"
-                              onClick={() => setDetailsModel(model)}
+                              onClick={() => handleViewDetails(model)}
                               aria-label={`View details for ${model.modelVersion}`}
                             >
                               <FaEye />

@@ -4,6 +4,7 @@ import {
   Button,
   Progress,
   Textarea,
+  TextInput,
 } from "flowbite-react";
 import { FaArrowLeft, FaChartBar } from "react-icons/fa";
 import { useNavigate, useParams } from "react-router-dom";
@@ -17,16 +18,49 @@ import Dropdown from "../../components/active-learning/Dropdown";
 const FEEDBACK_KEY = "activeLearningFeedback";
 const OVERRIDES_KEY = "activeLearningCaseOverrides";
 
+const TREATMENT_STEPS = [
+  {
+    value: "STEP_1",
+    label: "STEP_1 (standard dose 2nd gen antihistamine)",
+  },
+  {
+    value: "STEP_2",
+    label: "STEP_2 (up-dose antihistamine)",
+  },
+  {
+    value: "STEP_3",
+    label: "STEP_3 (add-on biologic like omalizumab)",
+  },
+  {
+    value: "STEP_4",
+    label: "STEP_4 (add-on immunosuppressant like cyclosporine)",
+  },
+];
+
+const DRUG_OPTIONS = [
+  { value: "SECOND_GEN_ANTIHISTAMINE", label: "Second gen antihistamine" },
+  { value: "UPDOSED_ANTIHISTAMINE", label: "Updosed antihistamine" },
+  { value: "ANTIHISTAMINE_PLUS_ADJUNCT", label: "Antihistamine + adjunct" },
+  { value: "OMALIZUMAB", label: "Omalizumab" },
+  { value: "CYCLOSPORINE", label: "Cyclosporine" },
+  { value: "SHORT_COURSE_STEROID", label: "Short course steroid" },
+  { value: "OTHER", label: "Other (specify)" },
+];
+
 const ReviewCaseDetailPage = () => {
   const { caseId } = useParams();
   const navigate = useNavigate();
   const [caseData, setCaseData] = useState(null);
   const [feedbackEntries, setFeedbackEntries] = useState([]);
-  const [correctedLabel, setCorrectedLabel] = useState("");
+  const [selectedStep, setSelectedStep] = useState("");
+  const [selectedDrug, setSelectedDrug] = useState("");
+  const [otherDrugText, setOtherDrugText] = useState("");
   const [comment, setComment] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedAction, setSelectedAction] = useState("");
 
   const getConfidencePercent = (item) => {
     if (typeof item?.overallConfidenceScore === "number") {
@@ -95,16 +129,74 @@ const ReviewCaseDetailPage = () => {
     return "gray";
   };
 
+  const normalizeOptionValue = (value) => {
+    if (typeof value !== "string") return "";
+    return value
+      .trim()
+      .toUpperCase()
+      .replace(/\+/g, "PLUS")
+      .replace(/[^A-Z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "");
+  };
+
+  const buildUrl = (baseUrl, path) => {
+    if (!baseUrl) return path;
+    if (baseUrl.endsWith("/") && path.startsWith("/")) {
+      return `${baseUrl.slice(0, -1)}${path}`;
+    }
+    if (!baseUrl.endsWith("/") && !path.startsWith("/")) {
+      return `${baseUrl}/${path}`;
+    }
+    return `${baseUrl}${path}`;
+  };
+
+  const isOtherDrugSelected = () => {
+    if (selectedDrug === "OTHER") return true;
+    const predicted = normalizeOptionValue(caseData?.predictedDrug);
+    return predicted === "OTHER";
+  };
+
+  const buildFeedbackPayload = ({ clinicianFinalDecision }) => {
+    const genderValue =
+      caseData?.patientGender || caseData?.gender || caseData?.sex || null;
+    const basePayload = {
+      patientAge: caseData?.patientAge ?? null,
+      patientGender: genderValue,
+      uct: caseData?.uct || null,
+      aect: caseData?.aect || null,
+      predictedDrug: caseData?.predictedDrug || null,
+      predictedStep: caseData?.predictedStep || null,
+      confidencePredictedDrugStep:
+        caseData?.confidencePredictedDrugStep ?? null,
+      clinicianFinalDecision,
+      reviewedBy: reviewerName,
+      comment: comment.trim() || "No comment",
+    };
+
+    if (clinicianFinalDecision === "CORRECTED") {
+      basePayload.correctedDrug =
+        selectedDrug === "OTHER" ? otherDrugText.trim() : selectedDrug || null;
+      basePayload.correctedStep = selectedStep || null;
+    }
+
+    return basePayload;
+  };
+
   useEffect(() => {
     const controller = new AbortController();
     const baseUrl =
       import.meta.env.VITE_API_BASE_URL || "http://localhost:8081";
-    const requestUrl = `${baseUrl}/api/v1/dashboard-review`;
+    const requestUrl = caseId
+      ? `${baseUrl}/api/v1/dashboard-review/${encodeURIComponent(caseId)}`
+      : "";
 
     const fetchCase = async () => {
       setIsLoading(true);
       setLoadError("");
       try {
+        if (!requestUrl) {
+          throw new Error("Missing case ID.");
+        }
         const headers = {};
         const basicAuth = import.meta.env.VITE_DASHBOARD_REVIEW_BASIC_AUTH;
         if (basicAuth) {
@@ -118,10 +210,14 @@ const ReviewCaseDetailPage = () => {
           throw new Error(`Request failed with ${response.status}`);
         }
         const payload = await response.json();
-        const records = Array.isArray(payload)
-          ? payload
-          : payload?.records || payload?.data || payload?.cases || [];
-        const baseCase = records.find((item) => item.caseId === caseId);
+        const baseCase = Array.isArray(payload)
+          ? payload.find((item) => item.caseId === caseId)
+          : Array.isArray(payload?.data)
+            ? payload.data.find((item) => item.caseId === caseId)
+            : payload?.record ||
+              payload?.case ||
+              payload?.data ||
+              payload;
         if (!baseCase) {
           setCaseData(null);
           return;
@@ -151,6 +247,22 @@ const ReviewCaseDetailPage = () => {
     return () => controller.abort();
   }, [caseId]);
 
+  useEffect(() => {
+    if (!caseData) return;
+    if (!selectedStep && caseData.predictedStep) {
+      const normalized = normalizeOptionValue(caseData.predictedStep);
+      if (TREATMENT_STEPS.some((option) => option.value === normalized)) {
+        setSelectedStep(normalized);
+      }
+    }
+    if (!selectedDrug && caseData.predictedDrug) {
+      const normalized = normalizeOptionValue(caseData.predictedDrug);
+      if (DRUG_OPTIONS.some((option) => option.value === normalized)) {
+        setSelectedDrug(normalized);
+      }
+    }
+  }, [caseData, selectedDrug, selectedStep]);
+
   const reviewerName = "Dr. Perera";
 
   const decisionStatus = useMemo(() => {
@@ -163,10 +275,6 @@ const ReviewCaseDetailPage = () => {
     }
     return "NEED_REVIEW";
   }, [caseData]);
-
-  const correctedOptions = caseData?.topK
-    ? caseData.topK.map((item) => item.label)
-    : [];
 
   const reviewedCount = useMemo(() => {
     const storedFeedback = JSON.parse(
@@ -187,17 +295,28 @@ const ReviewCaseDetailPage = () => {
     setCaseData((prev) => (prev ? { ...prev, ...updates } : prev));
   };
 
-  const handleDecision = (action) => {
-    if (action === "Corrected" && !correctedLabel) {
-      setErrorMessage("Select a corrected label before submitting.");
+  const handleDecision = async () => {
+    if (!selectedAction) {
+      setErrorMessage("Select an action before submitting.");
+      return;
+    }
+    if (
+      selectedAction === "Corrected" &&
+      selectedDrug === "OTHER" &&
+      !otherDrugText.trim()
+    ) {
+      setErrorMessage("Provide the other drug name before submitting.");
       return;
     }
 
+    const action = selectedAction;
     const entry = {
       caseId,
       originalPrediction: caseData.predictedLabel,
       clinicianAction: action,
-      correctedLabel: action === "Corrected" ? correctedLabel : "N/A",
+      treatmentStep: selectedStep || "N/A",
+      treatmentDrug: selectedDrug || "N/A",
+      otherDrug: otherDrugText.trim() || "N/A",
       comment: comment.trim() || "No comment",
       timestamp: new Date().toISOString(),
       reviewerName,
@@ -211,10 +330,55 @@ const ReviewCaseDetailPage = () => {
     setFeedbackEntries(nextFeedback.filter((item) => item.caseId === caseId));
 
     updateOverrides({ status: "REVIEWED" });
-    setCorrectedLabel("");
+    setSelectedAction("");
+    setSelectedStep("");
+    setSelectedDrug("");
+    setOtherDrugText("");
     setComment("");
     setErrorMessage("");
     toast.success("Clinician decision saved.");
+
+    const clinicianFinalDecision = action.toUpperCase();
+    const payload = buildFeedbackPayload({ clinicianFinalDecision });
+    const baseUrl =
+      import.meta.env.VITE_API_BASE_URL || "http://localhost:8081";
+    const feedbackUrl = buildUrl(
+      baseUrl,
+      `/api/v1/dashboard-review/${encodeURIComponent(caseId)}/clinician-feedback`
+    );
+    const headers = {
+      "Content-Type": "application/json",
+    };
+    const basicAuth = import.meta.env.VITE_DASHBOARD_REVIEW_BASIC_AUTH;
+    if (basicAuth) {
+      headers.Authorization = `Basic ${basicAuth}`;
+    }
+
+    try {
+      setIsSubmitting(true);
+      const response = await fetch(feedbackUrl, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload),
+      });
+      const responseBody = await response
+        .json()
+        .catch(() => ({}));
+      if (!response.ok || responseBody?.success === false) {
+        const message =
+          responseBody?.message ||
+          `Feedback request failed with ${response.status}`;
+        throw new Error(message);
+      }
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to submit retrain feedback."
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (isLoading) {
@@ -552,23 +716,104 @@ const ReviewCaseDetailPage = () => {
             </div>
           </div>
 
-          <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-            <p className="text-sm text-slate-500">Clinician Feedback Panel</p>
-            <h2 className="text-xl font-semibold text-slate-900">
-              Clinician Feedback
-            </h2>
-            <div className="mt-4 grid gap-4">
+          <div className="relative rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-sky-50 p-6 shadow-lg shadow-emerald-100/40">
+            <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-emerald-200/70 blur-3xl" />
+            <div className="pointer-events-none absolute -bottom-10 -left-10 h-32 w-32 rounded-full bg-sky-200/70 blur-3xl" />
+            <div className="relative">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-600">
+                Clinician Feedback Panel
+              </p>
+              <h2 className="text-2xl font-semibold text-slate-900">
+                Clinician Feedback
+              </h2>
+            </div>
+            <div className="relative mt-4 grid gap-4">
               <div>
-                <Dropdown
-                  value={correctedLabel}
-                  onChange={setCorrectedLabel}
-                  placeholder="Select corrected label (if needed)"
-                  options={correctedOptions.map((label) => ({
-                    value: label,
-                    label,
-                  }))}
-                />
+                <p className="text-xs font-semibold uppercase tracking-wide text-emerald-600">
+                  Feedback Action
+                </p>
               </div>
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  color={selectedAction === "Accepted" ? "success" : "gray"}
+                  onClick={() => setSelectedAction("Accepted")}
+                  disabled={isSubmitting}
+                  className={
+                    selectedAction === "Accepted"
+                      ? "shadow-md shadow-emerald-200/60"
+                      : "bg-white text-emerald-600 hover:bg-emerald-50"
+                  }
+                >
+                  Accept
+                </Button>
+                <Button
+                  color={selectedAction === "Corrected" ? "warning" : "gray"}
+                  onClick={() => setSelectedAction("Corrected")}
+                  disabled={isSubmitting}
+                  className={
+                    selectedAction === "Corrected"
+                      ? "shadow-md shadow-amber-200/70"
+                      : "bg-white text-amber-600 hover:bg-amber-50"
+                  }
+                >
+                  Correct
+                </Button>
+                <Button
+                  color={selectedAction === "Rejected" ? "failure" : "gray"}
+                  onClick={() => setSelectedAction("Rejected")}
+                  disabled={isSubmitting}
+                  className={
+                    selectedAction === "Rejected"
+                      ? "shadow-md shadow-rose-200/70"
+                      : "bg-white text-rose-600 hover:bg-rose-50"
+                  }
+                >
+                  Reject
+                </Button>
+              </div>
+              {selectedAction === "Corrected" && (
+                <>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 p-2">
+                        Corrected Step
+                      </p>
+                      <Dropdown
+                        value={selectedStep}
+                        onChange={setSelectedStep}
+                        placeholder="Select treatment stage"
+                        options={TREATMENT_STEPS}
+                      />
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 p-2">
+                        Corrected Drugs
+                      </p>
+                      <Dropdown
+                        value={selectedDrug}
+                        onChange={setSelectedDrug}
+                        placeholder="Select predicted drug class"
+                        options={DRUG_OPTIONS}
+                      />
+                    </div>
+                  </div>
+                  {isOtherDrugSelected() && (
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 p-2">
+                        Other Drugs
+                      </p>
+                      <TextInput
+                        placeholder="Enter other drug"
+                        value={otherDrugText}
+                        onChange={(event) => setOtherDrugText(event.target.value)}
+                      />
+                    </div>
+                  )}
+                </>
+              )}
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 p-1">
+                Feedback Comment
+              </p>
               <Textarea
                 rows={3}
                 placeholder="Clinician comment (optional)."
@@ -579,14 +824,13 @@ const ReviewCaseDetailPage = () => {
                 <p className="text-sm text-rose-600">{errorMessage}</p>
               )}
               <div className="flex flex-wrap gap-3">
-                <Button color="success" onClick={() => handleDecision("Accepted")}>
-                  Accept
-                </Button>
-                <Button color="warning" onClick={() => handleDecision("Corrected")}>
-                  Correct
-                </Button>
-                <Button color="failure" onClick={() => handleDecision("Rejected")}>
-                  Reject
+                <Button
+                  color="info"
+                  onClick={handleDecision}
+                  disabled={isSubmitting}
+                  className="shadow-md shadow-sky-200/70"
+                >
+                  Submit Feedback
                 </Button>
               </div>
             </div>
