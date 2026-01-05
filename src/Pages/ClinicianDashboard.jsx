@@ -169,7 +169,7 @@ export default function ClinicianDashboard() {
         const cases = await getCases();
         const responses = await Promise.all(
           cases.map((caseItem) =>
-            getDashboard(caseItem.caseId, diseaseType).then((dashboard) => {
+            getDashboard(caseItem.caseId, diseaseType, false).then((dashboard) => {
               const uctValue = resolveScore(dashboard.scores, "UCT");
               const aectValue = resolveScore(dashboard.scores, "AECT");
               const confidenceValue = dashboard.prediction?.confidence;

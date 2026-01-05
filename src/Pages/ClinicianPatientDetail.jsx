@@ -184,7 +184,7 @@ export default function ClinicianPatientDetail() {
       try {
         const [casesResponse, dashboardResponse] = await Promise.all([
           getCases(),
-          getDashboard(patientId, diseaseType),
+          getDashboard(patientId, diseaseType, true),
         ]);
         if (isMounted) {
           const matchedCase = casesResponse.find(
@@ -502,7 +502,7 @@ export default function ClinicianPatientDetail() {
             <div className="mt-6 grid gap-6 lg:grid-cols-2">
               <div className="space-y-4">
                 <p className="text-base font-semibold text-slate-700 dark:text-slate-200">
-                  SHAP-style feature contributions
+                  Key factors influencing the assessment
                 </p>
                 <div className="space-y-3">
                   {shapFeatures.length ? (
