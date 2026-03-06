@@ -111,6 +111,19 @@ function SectionHeader({ title, subtitle }) {
   );
 }
 
+function NarrativeRow({ label, value }) {
+  return (
+    <div className="space-y-1">
+      <p className="text-sm uppercase tracking-wide text-slate-500 dark:text-slate-400">
+        {label}
+      </p>
+      <p className="text-base text-slate-800 dark:text-slate-100">
+        {value || "Insufficient data"}
+      </p>
+    </div>
+  );
+}
+
 export default function ClinicianPatientDetail() {
   const { patientId } = useParams();
   const fallbackPatient = {
@@ -251,6 +264,10 @@ export default function ClinicianPatientDetail() {
   const recommendations = dashboard?.recommendations || [];
   const warningFlags = dashboard?.warningFlags || [];
   const diseaseControlTooltip = dashboard?.diseaseControlInfo?.tooltip || "";
+  const llmExplainability = dashboard?.llmExplainability;
+  const llmRecommendations = Array.isArray(llmExplainability?.recommendations)
+    ? llmExplainability.recommendations
+    : [];
 
   const handleCaseAction = async (finalStatus) => {
     setIsSubmitting(true);
@@ -570,6 +587,65 @@ export default function ClinicianPatientDetail() {
                 </div>
               </div>
             </div>
+          </Card>
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-3 animate-fade-in-delay-3">
+          <Card className={`lg:col-span-3 ${cardClass}`}>
+            <SectionHeader
+              title="LLM Explanation"
+              subtitle="Clinician-readable summary generated from the structured explainability evidence."
+            />
+            {isLoading ? (
+              <p className="mt-6 text-sm text-slate-500">
+                Loading LLM explanation...
+              </p>
+            ) : !llmExplainability ? (
+              <p className="mt-6 text-sm text-slate-500">
+                LLM explanation unavailable. Structured SHAP and Grad-CAM evidence remains visible.
+              </p>
+            ) : (
+              <div className="mt-6 grid gap-5">
+                <NarrativeRow
+                  label="Summary"
+                  value={llmExplainability.summary}
+                />
+                <NarrativeRow
+                  label="Evidence from tabular data"
+                  value={llmExplainability.tabularEvidence}
+                />
+                <NarrativeRow
+                  label="Evidence from image"
+                  value={llmExplainability.imageEvidence}
+                />
+                <NarrativeRow
+                  label="Control status"
+                  value={llmExplainability.controlStatus}
+                />
+
+                <div className="space-y-2">
+                  <p className="text-sm uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                    Recommendations
+                  </p>
+                  {llmRecommendations.length ? (
+                    <ul className="list-disc space-y-1 pl-5 text-base text-slate-800 dark:text-slate-100">
+                      {llmRecommendations.map((item, index) => (
+                        <li key={`llm-rec-${index}`}>{item}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-base text-slate-800 dark:text-slate-100">
+                      Insufficient data
+                    </p>
+                  )}
+                </div>
+
+                <NarrativeRow
+                  label="Safety note"
+                  value={llmExplainability.safetyNote}
+                />
+              </div>
+            )}
           </Card>
         </div>
 
