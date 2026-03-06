@@ -608,6 +608,10 @@ export default function ClinicianPatientDetail() {
                   value={llmExplainability.summary}
                 />
                 <NarrativeRow
+                  label="WHY THIS DECISION WAS MADE"
+                  value={llmExplainability.decisionRationale}
+                />
+                <NarrativeRow
                   label="Evidence from tabular data"
                   value={llmExplainability.tabularEvidence}
                 />
