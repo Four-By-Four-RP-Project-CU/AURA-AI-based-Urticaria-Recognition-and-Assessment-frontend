@@ -265,9 +265,6 @@ export default function ClinicianPatientDetail() {
   const warningFlags = dashboard?.warningFlags || [];
   const diseaseControlTooltip = dashboard?.diseaseControlInfo?.tooltip || "";
   const llmExplainability = dashboard?.llmExplainability;
-  const llmRecommendations = Array.isArray(llmExplainability?.recommendations)
-    ? llmExplainability.recommendations
-    : [];
 
   const handleCaseAction = async (finalStatus) => {
     setIsSubmitting(true);
@@ -622,23 +619,6 @@ export default function ClinicianPatientDetail() {
                   label="Control status"
                   value={llmExplainability.controlStatus}
                 />
-
-                <div className="space-y-2">
-                  <p className="text-sm uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                    Recommendations
-                  </p>
-                  {llmRecommendations.length ? (
-                    <ul className="list-disc space-y-1 pl-5 text-base text-slate-800 dark:text-slate-100">
-                      {llmRecommendations.map((item, index) => (
-                        <li key={`llm-rec-${index}`}>{item}</li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-base text-slate-800 dark:text-slate-100">
-                      Insufficient data
-                    </p>
-                  )}
-                </div>
 
                 <NarrativeRow
                   label="Safety note"
