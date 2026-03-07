@@ -362,8 +362,8 @@ const AnalyzePage = () => {
               {/* Lab reports */}
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <FieldLabel label="Lab Report Image(s)" unit="optional — OCR extracts CRP / FT4 / IgE / VitD" />
-                  <button
+                <FieldLabel label="Lab Report Image(s)" unit="optional — OCR extracts CRP / FT4 / IgE / VitD" />
+                <button
                     type="button"
                     onClick={handleExtractLabs}
                     disabled={!labReports.length || labAnalyzing}
@@ -538,6 +538,7 @@ const AnalyzePage = () => {
   const cuChars = result?.cu_characteristics;
   const align = result?.guideline_step_alignment;
   const labsUsed = result?.used_features || {};
+  const labSources = result?.lab_sources || {};
 
   const alignLabel = {
     aligned: { text: '✓ Aligned with UAS7 severity', cls: 'text-emerald-600 dark:text-emerald-400' },
@@ -737,14 +738,42 @@ const AnalyzePage = () => {
               { k: 'Age',  unit: 'yr',    ref: '—' },
             ].map(({ k, unit, ref }) => {
               const v = labsUsed[k];
+              const src = labSources[k];
+              const isFallback = src === 'fallback';
+              const isOcr = src === 'ocr';
+              let srcTitle;
+              if (isFallback) srcTitle = `OCR could not read ${k} from the lab report. Training-set mean used — enter the value manually for an accurate prediction.`;
+              else if (isOcr) srcTitle = `Value extracted by OCR from lab report`;
+              else srcTitle = `Value entered manually`;
               return (
-                <div key={k} className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3 text-center">
+                <div
+                  key={k}
+                  title={srcTitle}
+                  className={`rounded-lg p-3 text-center border ${
+                    isFallback
+                      ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700'
+                      : 'bg-gray-50 dark:bg-gray-700 border-transparent'
+                  }`}
+                >
                   <p className="text-xs font-bold text-gray-400 mb-0.5">{k}</p>
-                  <p className="text-xl font-extrabold text-blue-600 dark:text-blue-400">
+                  <p className={`text-xl font-extrabold ${
+                    isFallback ? 'text-amber-500 dark:text-amber-400' : 'text-blue-600 dark:text-blue-400'
+                  }`}>
                     {v !== undefined ? (Number.isInteger(v) ? v : (+v).toFixed(1)) : '—'}
                   </p>
                   <p className="text-xs text-gray-400">{unit}</p>
                   <p className="text-xs text-gray-400 mt-1">ref: {ref}</p>
+                  {isFallback && (
+                    <span className="inline-block mt-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-200 dark:bg-amber-800 text-amber-800 dark:text-amber-200 uppercase tracking-wide"
+                      title="OCR could not read this value — training-set mean substituted">
+                      est.
+                    </span>
+                  )}
+                  {isOcr && (
+                    <span className="inline-block mt-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-sky-100 dark:bg-sky-900/40 text-sky-600 dark:text-sky-400 uppercase tracking-wide">
+                      ocr
+                    </span>
+                  )}
                 </div>
               );
             })}
