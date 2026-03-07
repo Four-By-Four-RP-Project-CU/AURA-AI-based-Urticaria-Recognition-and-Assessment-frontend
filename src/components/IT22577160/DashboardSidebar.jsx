@@ -1,16 +1,12 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
-  FaUser,
-  FaFlask,
-  FaImage,
-  FaPills,
   FaClipboardList,
-  FaExclamationTriangle,
   FaChevronLeft,
   FaChevronRight,
   FaTachometerAlt,
-  FaMicroscope
+  FaMicroscope,
+  FaHistory
 } from 'react-icons/fa';
 
 const DashboardSidebar = () => {
@@ -33,34 +29,6 @@ const DashboardSidebar = () => {
       bgColor: 'bg-indigo-50 dark:bg-indigo-900/20'
     },
     {
-      name: 'Patient Profile',
-      path: '/patient-profile',
-      icon: FaUser,
-      color: 'text-blue-500',
-      bgColor: 'bg-blue-50 dark:bg-blue-900/20'
-    },
-    {
-      name: 'Lab Entry',
-      path: '/lab-entry',
-      icon: FaFlask,
-      color: 'text-purple-500',
-      bgColor: 'bg-purple-50 dark:bg-purple-900/20'
-    },
-    {
-      name: 'Patient Images',
-      path: '/patient-images',
-      icon: FaImage,
-      color: 'text-pink-500',
-      bgColor: 'bg-pink-50 dark:bg-pink-900/20'
-    },
-    {
-      name: 'Drug Recommendations',
-      path: '/drug-recommendations',
-      icon: FaPills,
-      color: 'text-green-500',
-      bgColor: 'bg-green-50 dark:bg-green-900/20'
-    },
-    {
       name: 'Treatment Guidelines',
       path: '/treatment-guidelines',
       icon: FaClipboardList,
@@ -68,11 +36,11 @@ const DashboardSidebar = () => {
       bgColor: 'bg-indigo-50 dark:bg-indigo-900/20'
     },
     {
-      name: 'Safety Alerts',
-      path: '/safety-alerts',
-      icon: FaExclamationTriangle,
-      color: 'text-red-500',
-      bgColor: 'bg-red-50 dark:bg-red-900/20'
+      name: 'Analysis Records',
+      path: '/analysis-records',
+      icon: FaHistory,
+      color: 'text-teal-500',
+      bgColor: 'bg-teal-50 dark:bg-teal-900/20'
     }
   ];
 
