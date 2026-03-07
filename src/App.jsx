@@ -19,6 +19,7 @@ import GuidelineFlowPage from "./components/IT22577160/GuidelineStepFlow";
 import SafetyAlertPage from "./components/IT22577160/SafetyAlert";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import Dashboard from "./Pages/DashboardNew";
 
 const App = () => {
   return (
@@ -42,6 +43,7 @@ const App = () => {
             <Route path="/safety-alerts" element={<DashboardLayout><SafetyAlertPage /></DashboardLayout>} />
             <Route path="/analyze" element={<DashboardLayout><AnalyzePage /></DashboardLayout>} />
             <Route path="/analysis-records" element={<DashboardLayout><AnalysisRecordsPage /></DashboardLayout>} />
+            <Route path="/dashboard" element={<Dashboard />} />
           </Routes>
         </div>
         <FooterComponent />
