@@ -1,4 +1,5 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import {
   FaMicroscope, FaFlask, FaUser, FaHeartbeat, FaFilePdf,
@@ -148,6 +149,8 @@ function ConfidenceBar({ value, abstain }) {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 const AnalyzePage = () => {
+  const location = useLocation();
+  const isViewingRecord = !!location.state?.viewRecord;
   const [phase, setPhase] = useState('form'); // 'form' | 'loading' | 'results'
   const [result, setResult] = useState(null);
 
@@ -179,6 +182,18 @@ const AnalyzePage = () => {
   const [abstainThreshold, setAbstainThreshold] = useState(0.55);
 
   const [labAnalyzing, setLabAnalyzing] = useState(false);
+
+  // ── Restore from Analysis Records page navigation ─────────────────────────
+  useEffect(() => {
+    const rec = location.state?.viewRecord;
+    if (!rec) return;
+    setResult(rec);
+    setCaseId(rec._caseId || '');
+    setPatientName(rec._patientName || '');
+    if (rec._skinPreview) setSkinPreview(rec._skinPreview);
+    if (rec._labs) setLabs(rec._labs);
+    setPhase('results');
+  }, []);
 
   const skinInputRef = useRef();
   const labInputRef = useRef();
@@ -250,12 +265,25 @@ const AnalyzePage = () => {
     try {
       const data = await callAnalyze(buildFormData());
       setResult(data);
-      localStorage.setItem('aura_last_result', JSON.stringify({
+
+      // ── Persist to analysis records list ─────────────────────────────
+      const record = {
         ...data,
+        _id: Date.now(),
         _ts: new Date().toISOString(),
         _patientName: patientName || 'Anonymous',
         _caseId: caseId || '—',
-      }));
+        _skinPreview: skinPreview || null,
+        _labs: { ...labs },
+        _clinical: { weight, height, itchingScore, ageFirstSymptoms, diagnosedAge },
+        _uas7Input: { uas7, dailyWheal, dailyPruritus },
+      };
+      try {
+        const existing = JSON.parse(localStorage.getItem('aura_analysis_records') || '[]');
+        const updated = [record, ...existing].slice(0, 50);
+        localStorage.setItem('aura_analysis_records', JSON.stringify(updated));
+      } catch { /* storage full — skip silently */ }
+
       setPhase('results');
     } catch (err) {
       setPhase('form');
@@ -346,7 +374,7 @@ const AnalyzePage = () => {
                         onClick={e => { e.stopPropagation(); setSkinImage(null); setSkinPreview(null); }}
                         className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-1.5 text-xs shadow"
                       ><FaTimes /></button>
-                      <p className="text-xs text-gray-400 mt-1 truncate max-w-full">{skinImage.name}</p>
+                      {skinImage && <p className="text-xs text-gray-400 mt-1 truncate max-w-full">{skinImage.name}</p>}
                     </>
                   ) : (
                     <>
@@ -571,13 +599,15 @@ const AnalyzePage = () => {
             >
               <FaArrowLeft size={12} /><span>New Analysis</span>
             </button>
-            <button
-              type="button"
-              onClick={handleDownloadPdf}
-              className="px-5 py-2 bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-lg text-sm font-bold shadow hover:shadow-blue-400/40 hover:shadow-lg transition-all flex items-center space-x-2"
-            >
-              <FaFilePdf /><span>Download PDF Report</span>
-            </button>
+            {!isViewingRecord && (
+              <button
+                type="button"
+                onClick={handleDownloadPdf}
+                className="px-5 py-2 bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-lg text-sm font-bold shadow hover:shadow-blue-400/40 hover:shadow-lg transition-all flex items-center space-x-2"
+              >
+                <FaFilePdf /><span>Download PDF Report</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -819,24 +849,6 @@ const AnalyzePage = () => {
             <strong>Clinical Decision Support Only.</strong> This AI assists trained clinicians — it does not replace physician judgment.
             All recommendations must be reviewed and verified by a licensed medical professional before acting.
           </p>
-        </div>
-
-        {/* Bottom buttons */}
-        <div className="flex flex-col sm:flex-row justify-between gap-3">
-          <button
-            type="button"
-            onClick={() => { setResult(null); setPhase('form'); }}
-            className="px-6 py-3 border border-gray-300 dark:border-gray-600 rounded-xl text-sm font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2 justify-center"
-          >
-            <FaArrowLeft size={12} /><span>New Analysis</span>
-          </button>
-          <button
-            type="button"
-            onClick={handleDownloadPdf}
-            className="px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-xl font-bold shadow-lg hover:shadow-blue-400/40 hover:shadow-xl hover:scale-105 transition-all flex items-center gap-2 justify-center"
-          >
-            <FaFilePdf /><span>Download Full PDF Report</span>
-          </button>
         </div>
       </div>
     </div>
