@@ -12,6 +12,8 @@ import DashboardPage from "./Pages/IT22577160/DashboardPage";
 import PatientProfilePage from "./Pages/IT22577160/PatientProfilePage";
 import LabEntryPage from "./Pages/IT22577160/LabEntryPage";
 import PatientImageUploadPage from "./Pages/IT22577160/PatientImageUploadPage";
+import AnalyzePage from './Pages/IT22577160/AnalyzePage';
+import AnalysisRecordsPage from './Pages/IT22577160/AnalysisRecordsPage';
 import DrugRecommendationPage from "./components/IT22577160/DrugRecommendationCard";
 import GuidelineFlowPage from "./components/IT22577160/GuidelineStepFlow";
 import SafetyAlertPage from "./components/IT22577160/SafetyAlert";
@@ -39,6 +41,8 @@ const App = () => {
             <Route path="/drug-recommendations" element={<DashboardLayout><DrugRecommendationPage /></DashboardLayout>} />
             <Route path="/treatment-guidelines" element={<DashboardLayout><GuidelineFlowPage /></DashboardLayout>} />
             <Route path="/safety-alerts" element={<DashboardLayout><SafetyAlertPage /></DashboardLayout>} />
+            <Route path="/analyze" element={<DashboardLayout><AnalyzePage /></DashboardLayout>} />
+            <Route path="/analysis-records" element={<DashboardLayout><AnalysisRecordsPage /></DashboardLayout>} />
             <Route path="/dashboard" element={<Dashboard />} />
           </Routes>
         </div>
