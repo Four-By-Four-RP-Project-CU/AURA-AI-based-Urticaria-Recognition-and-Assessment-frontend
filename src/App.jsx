@@ -17,9 +17,13 @@ import AnalysisRecordsPage from './Pages/IT22577160/AnalysisRecordsPage';
 import DrugRecommendationPage from "./components/IT22577160/DrugRecommendationCard";
 import GuidelineFlowPage from "./components/IT22577160/GuidelineStepFlow";
 import SafetyAlertPage from "./components/IT22577160/SafetyAlert";
+// IT22607232 — Risk & Side-Effect Profiling
+import DashboardNew from "./Pages/IT22607232/DashboardNew";
+import RiskAssessment from "./Pages/IT22607232/RiskAssessment";
+import RiskResultsPage from "./Pages/IT22607232/RiskResultsPage";
+import RiskHistoryPage from "./Pages/IT22607232/RiskHistoryPage";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
-import Dashboard from "./Pages/DashboardNew";
 
 const App = () => {
   return (
@@ -43,7 +47,11 @@ const App = () => {
             <Route path="/safety-alerts" element={<DashboardLayout><SafetyAlertPage /></DashboardLayout>} />
             <Route path="/analyze" element={<DashboardLayout><AnalyzePage /></DashboardLayout>} />
             <Route path="/analysis-records" element={<DashboardLayout><AnalysisRecordsPage /></DashboardLayout>} />
-            <Route path="/dashboard" element={<Dashboard />} />
+            {/* IT22607232 — Risk & Side-Effect Profiling */}
+            <Route path="/risk-dashboard" element={<DashboardLayout><DashboardNew /></DashboardLayout>} />
+            <Route path="/risk-assessment" element={<DashboardLayout><RiskAssessment /></DashboardLayout>} />
+            <Route path="/risk-results" element={<DashboardLayout><RiskResultsPage /></DashboardLayout>} />
+            <Route path="/risk-history" element={<DashboardLayout><RiskHistoryPage /></DashboardLayout>} />
           </Routes>
         </div>
         <FooterComponent />

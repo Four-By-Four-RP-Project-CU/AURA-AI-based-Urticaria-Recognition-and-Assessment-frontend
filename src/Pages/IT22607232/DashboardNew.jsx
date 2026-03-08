@@ -1,593 +1,349 @@
-import { useState, useEffect } from 'react';
-import { Button, Card, Label, TextInput, Textarea, Select } from 'flowbite-react';
-import { HiClipboardList, HiChartBar, HiTrash, HiLightningBolt } from 'react-icons/hi';
-import RiskDashboard from '../components/RiskDashboard';
+﻿import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  HiChartBar, HiLightningBolt, HiShieldCheck, HiShieldExclamation,
+  HiBeaker, HiSparkles, HiChip, HiHeart,
+  HiExclamation, HiCheckCircle, HiArrowRight, HiRefresh,
+  HiInformationCircle, HiDocumentReport, HiTrendingUp,
+} from 'react-icons/hi';
 
+//  Helpers 
+function KpiCard({ icon: Icon, iconBg, label, value, sub, flag }) {
+  return (
+    <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 p-5 flex items-start gap-4 shadow-sm hover:shadow-md transition-shadow">
+      <div className={`p-3 rounded-xl ${iconBg} flex-shrink-0`}>
+        <Icon className="w-6 h-6 text-white" />
+      </div>
+      <div className="min-w-0">
+        <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-0.5">{label}</p>
+        <p className="text-2xl font-extrabold text-gray-900 dark:text-white truncate">{value}</p>
+        {sub  && <p className="text-xs text-gray-500 mt-0.5 truncate">{sub}</p>}
+        {flag && <span className="inline-flex items-center gap-1 text-xs mt-1 px-2 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 font-semibold"><HiExclamation className="w-3 h-3"/>Flag raised</span>}
+      </div>
+    </div>
+  );
+}
+
+function RiskBar({ label, pct, color }) {
+  return (
+    <div>
+      <div className="flex justify-between text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+        <span>{label}</span><span>{pct.toFixed(1)}%</span>
+      </div>
+      <div className="h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+        <div className={`h-full rounded-full transition-all duration-1000 ${color}`} style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
+const SEV_BAND_COLOR = { MILD: 'text-green-600', MODERATE: 'text-amber-500', SEVERE: 'text-orange-600', EXTREME: 'text-red-600' };
+const SE_LEVEL_COLOR = { LOW: 'text-green-600', MODERATE: 'text-amber-500', HIGH: 'text-red-600' };
+const COMPOSITE_COLOR = (c) => c > 0.66 ? 'text-red-600' : c > 0.33 ? 'text-amber-500' : 'text-green-600';
+
+//  Quick-action tiles 
+const ACTIONS = [
+  {
+    icon: HiSparkles,
+    iconBg: 'bg-gradient-to-br from-violet-500 to-purple-600',
+    title: 'New Risk Assessment',
+    desc: 'Run a full AI-powered CU risk & side-effect profile',
+    href: '/risk-assessment',
+    primary: true,
+  },
+  {
+    icon: HiDocumentReport,
+    iconBg: 'bg-gradient-to-br from-teal-500 to-cyan-600',
+    title: 'View Last Results',
+    desc: 'Review detailed charts from most recent assessment',
+    href: '/risk-results',
+    primary: false,
+  },
+  {
+    icon: HiDocumentReport,
+    iconBg: 'bg-gradient-to-br from-indigo-500 to-blue-600',
+    title: 'Risk History',
+    desc: 'View all your past risk profilings',
+    href: '/risk-history',
+    primary: false,
+  },
+];
+
+//  Clinical reference banner items 
+const GUIDANCE = [
+  { tag: 'UAS7  28', note: 'Poorly controlled CU  consider step-up therapy or biologic (omalizumab).' },
+  { tag: 'CRP > 10', note: 'Elevated inflammation marker  check for infectious or autoimmune trigger.' },
+  { tag: 'IgE > 100', note: 'Elevated total IgE  assess for atopic co-morbidities and allergen sensitisation.' },
+  { tag: 'FT4 < 0.8', note: 'Low free T4  possible hypothyroidism; 30% of CU patients have thyroid autoimmunity.' },
+  { tag: 'VitD < 20', note: 'Vitamin D deficiency is associated with increased CU severity.' },
+];
+
+//  Main Component 
 export default function DashboardNew() {
-  const [formData, setFormData] = useState(() => {
-    const saved = localStorage.getItem('auraFormData');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error('Error parsing saved form data:', e);
-      }
-    }
-    return {
-      age: '',
-      gender: '',
-      Weight: '',
-      Height: '',
-      'Diagnosed at the age of': '',
-      IgE: '',
-      CRP: '',
-      FT4: '',
-      VitD: '',
-      'History of Chronic Urticaria': '',
-      'Symptoms Of Urticaria': '',
-      'Duration of Symptoms of urticaria': '',
-      'Which time of the day do the symptoms occur?': '',
-      'Family History of Urticaria': '',
-      'Family history of thyroid diseases': '',
-      'Family history of autoimmune diseases': '',
-      symptoms_raw: '',
-      investigations_raw: '',
-      previous_treatments: '',
-      medical_history: '',
-      'If  angioedema is present': '',
-      duration_days: '',
-      urticaria_activity_score: ''
-    };
-  });
-
-  const [patientData, setPatientData] = useState(null);
-  const [showResults, setShowResults] = useState(false);
+  const navigate  = useNavigate();
+  const [last, setLast] = useState(null);   // parsed sessionStorage result
+  const [tick, setTick] = useState(0);     // for manual refresh
 
   useEffect(() => {
-    localStorage.setItem('auraFormData', JSON.stringify(formData));
-  }, [formData]);
+    const raw = sessionStorage.getItem('aura_risk_result');
+    if (raw) {
+      try { setLast(JSON.parse(raw)); } catch {}
+    }
+  }, [tick]);
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
+  const R   = last?.result ?? null;
+  const hasResult = !!R;
 
-  const handleClearForm = () => {
-    const emptyForm = {
-      age: '',
-      gender: '',
-      Weight: '',
-      Height: '',
-      'Diagnosed at the age of': '',
-      IgE: '',
-      CRP: '',
-      FT4: '',
-      VitD: '',
-      'History of Chronic Urticaria': '',
-      'Symptoms Of Urticaria': '',
-      'Duration of Symptoms of urticaria': '',
-      'Which time of the day do the symptoms occur?': '',
-      'Family History of Urticaria': '',
-      'Family history of thyroid diseases': '',
-      'Family history of autoimmune diseases': '',
-      symptoms_raw: '',
-      investigations_raw: '',
-      previous_treatments: '',
-      medical_history: '',
-      'If  angioedema is present': '',
-      duration_days: '',
-      urticaria_activity_score: ''
-    };
-    setFormData(emptyForm);
-    setPatientData(null);
-    localStorage.removeItem('auraFormData');
-  };
-
-  const handleLoadSample = () => {
-    const sampleData = {
-      age: '24',
-      gender: 'Female',
-      Weight: '62',
-      Height: '168',
-      'Diagnosed at the age of': '23',
-      IgE: '70',
-      CRP: '1.0',
-      FT4: '1.2',
-      VitD: '28',
-      'History of Chronic Urticaria': 'Yes',
-      'Symptoms Of Urticaria': 'Wheals',
-      'Duration of Symptoms of urticaria': 'More than 6 weeks',
-      'Which time of the day do the symptoms occur?': 'Only after trigger',
-      'Family History of Urticaria': 'No',
-      'Family history of thyroid diseases': 'No',
-      'Family history of autoimmune diseases': 'No',
-      symptoms_raw: 'Severe itching, raised red welts on arms and torso, worsens at night',
-      investigations_raw: 'Elevated IgE, positive skin prick test for dust mites',
-      previous_treatments: 'Antihistamines (cetirizine 10mg), limited response',
-      medical_history: 'Allergic rhinitis, no history of angioedema',
-      'If  angioedema is present': 'No',
-      duration_days: '45',
-      urticaria_activity_score: '7'
-    };
-    setFormData(sampleData);
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    
-    // Convert form data to model input format
-    const modelInput = {};
-    
-    // Numeric fields
-    if (formData.age) modelInput.Age = Number.parseFloat(formData.age);
-    if (formData.Weight) modelInput.Weight = Number.parseFloat(formData.Weight);
-    if (formData.Height) modelInput.Height = Number.parseFloat(formData.Height);
-    if (formData['Diagnosed at the age of']) modelInput['Diagnosed at the age of'] = Number.parseFloat(formData['Diagnosed at the age of']);
-    if (formData.IgE) modelInput.IgE = Number.parseFloat(formData.IgE);
-    if (formData.duration_days) modelInput.duration_days = Number.parseFloat(formData.duration_days);
-    if (formData.urticaria_activity_score) modelInput.urticaria_activity_score = Number.parseFloat(formData.urticaria_activity_score);
-    if (formData.CRP) modelInput.CRP = Number.parseFloat(formData.CRP);
-    if (formData.FT4) modelInput.FT4 = Number.parseFloat(formData.FT4);
-    if (formData.VitD) modelInput.VitD = Number.parseFloat(formData.VitD);
-    
-    // Categorical/Text fields
-    if (formData.gender) modelInput.gender = formData.gender;
-    if (formData['History of Chronic Urticaria']) modelInput['History of Chronic Urticaria'] = formData['History of Chronic Urticaria'];
-    if (formData['Symptoms Of Urticaria']) modelInput['Symptoms Of Urticaria'] = formData['Symptoms Of Urticaria'];
-    if (formData['Duration of Symptoms of urticaria']) modelInput['Duration of Symptoms of urticaria'] = formData['Duration of Symptoms of urticaria'];
-    if (formData['Which time of the day do the symptoms occur?']) modelInput['Which time of the day do the symptoms occur?'] = formData['Which time of the day do the symptoms occur?'];
-    if (formData['Family History of Urticaria']) modelInput['Family History of Urticaria'] = formData['Family History of Urticaria'];
-    if (formData['Family history of thyroid diseases']) modelInput['Family history of thyroid diseases'] = formData['Family history of thyroid diseases'];
-    if (formData['Family history of autoimmune diseases']) modelInput['Family history of autoimmune diseases'] = formData['Family history of autoimmune diseases']
-    
-    // Numeric fields
-    if (formData.age) modelInput.age = Number.parseFloat(formData.age);
-    if (formData.IgE) modelInput.IgE = Number.parseFloat(formData.IgE);
-    if (formData.duration_days) modelInput.duration_days = Number.parseFloat(formData.duration_days);
-    if (formData.urticaria_activity_score) modelInput.urticaria_activity_score = Number.parseFloat(formData.urticaria_activity_score);
-    if (formData.CRP) modelInput.CRP = Number.parseFloat(formData.CRP);
-    
-    // Categorical/Text fields
-    if (formData.gender) modelInput.gender = formData.gender;
-    if (formData.symptoms_raw) modelInput.symptoms_raw = formData.symptoms_raw;
-    if (formData.investigations_raw) modelInput.investigations_raw = formData.investigations_raw;
-    if (formData.previous_treatments) modelInput.previous_treatments = formData.previous_treatments;
-    if (formData.medical_history) modelInput.medical_history = formData.medical_history;
-    if (formData['If  angioedema is present']) modelInput['If  angioedema is present'] = formData['If  angioedema is present'];
-
-    setPatientData(modelInput);
-    setShowResults(true);
-  };
+  // KPI values derived from last result
+  const composite   = R?.composite_risk_score ?? null;
+  const sevScore    = R?.severity?.predicted_score ?? null;
+  const sevBand     = R?.severity?.band ?? null;
+  const seLevel     = R?.sideeffect_risk?.level ?? null;
+  const seFlag      = R?.sideeffect_risk?.high_risk_flag ?? false;
+  const cuType      = R?.urticaria_type?.predicted ?? null;
+  const cuConf      = R?.urticaria_type?.confidence_pct ?? null;
+  const thyPct      = R?.secondary_disease_risk?.thyroid_risk_pct ?? null;
+  const autPct      = R?.secondary_disease_risk?.autoimmune_risk_pct ?? null;
+  const thyFlag     = R?.secondary_disease_risk?.thyroid_flag ?? false;
+  const autFlag     = R?.secondary_disease_risk?.autoimmune_flag ?? false;
+  const interp      = R?.clinical_interpretation ?? null;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-sky-50 to-teal-50 dark:from-gray-900 dark:via-slate-900 dark:to-gray-900 p-6">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-8 text-center">
-          <h1 className="text-5xl font-bold mb-2">
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-600 to-teal-600 dark:from-cyan-400 dark:to-teal-400">
-              AURA
-            </span>{' '}
-            <span className="text-gray-900 dark:text-white">Dashboard</span>
-          </h1>
-          <p className="text-xl text-gray-600 dark:text-gray-400">
-            AI-Powered Urticaria Risk Assessment System
-          </p>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-cyan-50 to-teal-50 dark:from-gray-950 dark:via-slate-900 dark:to-gray-950">
+
+      {/*  Page Banner  */}
+      <div className="bg-gradient-to-r from-cyan-700 via-teal-700 to-blue-800 px-6 py-7">
+        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 text-cyan-300 text-xs font-semibold uppercase tracking-widest mb-1">
+              <HiChip className="w-3.5 h-3.5" /> AURA  AI Risk Profiling
+            </div>
+            <h1 className="text-3xl font-extrabold text-white">Clinical Dashboard</h1>
+            <p className="text-cyan-200 text-sm mt-1">
+              Chronic Urticaria  Risk  Severity  Side-Effect  Secondary Disease
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            {hasResult && (
+              <button onClick={() => setTick(t => t + 1)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm font-medium border border-white/20 transition-all">
+                <HiRefresh className="w-4 h-4" /> Refresh
+              </button>
+            )}
+            <button onClick={() => navigate('/risk-assessment')}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white text-cyan-700 font-bold text-sm hover:bg-cyan-50 transition-all shadow-md">
+              <HiSparkles className="w-4 h-4" /> New Assessment
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-8">
+
+        {/*  Status Banner  */}
+        <div className={`rounded-2xl p-4 flex items-start gap-3 border ${
+          !hasResult
+            ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800'
+            : (thyFlag || autFlag || seFlag)
+              ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800'
+              : 'bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800'
+        }`}>
+          {!hasResult
+            ? <HiInformationCircle className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
+            : (thyFlag || autFlag || seFlag)
+              ? <HiShieldExclamation className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+              : <HiShieldCheck className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+          }
+          <div>
+            <p className={`text-sm font-semibold ${
+              !hasResult ? 'text-blue-800 dark:text-blue-300'
+              : (thyFlag || autFlag || seFlag) ? 'text-amber-800 dark:text-amber-300'
+              : 'text-green-800 dark:text-green-300'
+            }`}>
+              {!hasResult
+                ? 'No assessment on record  run one to populate the dashboard'
+                : (thyFlag || autFlag || seFlag)
+                  ? 'Clinical flags raised  review secondary risk indicators below'
+                  : 'Last assessment complete  all risk indicators within normal range'
+              }
+            </p>
+            {interp && <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">{interp}</p>}
+          </div>
         </div>
 
-        {/* Toggle Buttons */}
-        <div className="flex justify-center gap-4 mb-6">
-          <Button
-            color={!showResults ? 'cyan' : 'gray'}
-            size="lg"
-            onClick={() => setShowResults(false)}
-            className={!showResults ? 'bg-gradient-to-r from-cyan-600 to-teal-600' : ''}
-          >
-            <HiClipboardList className="mr-2 h-5 w-5" />
-            Patient Input
-          </Button>
-          <Button
-            color={showResults ? 'cyan' : 'gray'}
-            size="lg"
-            onClick={() => setShowResults(true)}
-            className={showResults ? 'bg-gradient-to-r from-cyan-600 to-teal-600' : ''}
-            disabled={!patientData}
-          >
-            <HiChartBar className="mr-2 h-5 w-5" />
-            Risk Assessment
-          </Button>
+        {/*  KPI Row  */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <KpiCard
+            icon={HiTrendingUp}
+            iconBg={hasResult ? (composite > 0.66 ? 'bg-red-500' : composite > 0.33 ? 'bg-amber-500' : 'bg-green-500') : 'bg-gray-400'}
+            label="Composite Risk"
+            value={hasResult ? `${(composite * 100).toFixed(0)}%` : ''}
+            sub={hasResult ? 'Overall weighted risk score' : 'No data yet'}
+          />
+          <KpiCard
+            icon={HiChartBar}
+            iconBg={hasResult ? (sevScore > 6 ? 'bg-red-500' : sevScore > 3 ? 'bg-amber-500' : 'bg-green-500') : 'bg-gray-400'}
+            label="Severity Score"
+            value={hasResult ? `${sevScore?.toFixed(1)} / 10` : ''}
+            sub={sevBand ?? 'No data yet'}
+          />
+          <KpiCard
+            icon={HiLightningBolt}
+            iconBg={hasResult ? (seLevel === 'HIGH' ? 'bg-red-500' : seLevel === 'MODERATE' ? 'bg-amber-500' : 'bg-green-500') : 'bg-gray-400'}
+            label="Side-Effect Risk"
+            value={seLevel ?? ''}
+            sub={hasResult ? 'Treatment risk level' : 'No data yet'}
+            flag={seFlag}
+          />
+          <KpiCard
+            icon={HiChip}
+            iconBg="bg-gradient-to-br from-indigo-500 to-blue-600"
+            label="Urticaria Type"
+            value={cuType ?? ''}
+            sub={cuConf != null ? `${cuConf.toFixed(1)}% confidence` : 'No data yet'}
+          />
         </div>
 
-        {/* Input Form */}
-        {!showResults && (
-          <Card>
-              <div className="flex justify-between items-center mb-6">
-                <div>
-                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Patient Information</h2>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Enter clinical data for risk assessment</p>
+        {/*  Main content: secondary risks + quick actions  */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+          {/* Secondary Disease Risk Panel */}
+          <div className="lg:col-span-2 bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
+            <div className="bg-gradient-to-r from-rose-600 to-pink-700 px-5 py-4 flex items-center gap-2">
+              <HiHeart className="w-5 h-5 text-white" />
+              <h2 className="text-white font-bold">Secondary Disease Risk</h2>
+              <span className="ml-auto text-xs text-rose-200">Thyroid & Autoimmune co-morbidity</span>
+            </div>
+            <div className="p-5 space-y-5">
+              {hasResult ? (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    {/* Thyroid */}
+                    <div className={`rounded-xl p-4 border ${thyFlag ? 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700'}`}>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">Thyroid Risk</p>
+                      <p className={`text-3xl font-extrabold ${thyFlag ? 'text-red-600 dark:text-red-400' : 'text-gray-800 dark:text-white'}`}>{thyPct?.toFixed(1)}%</p>
+                      {thyFlag && <span className="inline-flex items-center gap-1 text-xs mt-1 font-semibold text-red-700 dark:text-red-300"><HiExclamation className="w-3 h-3"/>Flag &gt; 50%</span>}
+                      {!thyFlag && <p className="text-xs text-gray-400 mt-1">Within normal range</p>}
+                    </div>
+                    {/* Autoimmune */}
+                    <div className={`rounded-xl p-4 border ${autFlag ? 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700'}`}>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">Autoimmune Risk</p>
+                      <p className={`text-3xl font-extrabold ${autFlag ? 'text-red-600 dark:text-red-400' : 'text-gray-800 dark:text-white'}`}>{autPct?.toFixed(1)}%</p>
+                      {autFlag && <span className="inline-flex items-center gap-1 text-xs mt-1 font-semibold text-red-700 dark:text-red-300"><HiExclamation className="w-3 h-3"/>Flag &gt; 50%</span>}
+                      {!autFlag && <p className="text-xs text-gray-400 mt-1">Within normal range</p>}
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <RiskBar label="Thyroid Risk" pct={thyPct ?? 0} color={thyFlag ? 'bg-red-500' : 'bg-pink-400'} />
+                    <RiskBar label="Autoimmune Risk" pct={autPct ?? 0} color={autFlag ? 'bg-red-500' : 'bg-purple-400'} />
+                    <RiskBar label="Side-Effect Risk (HIGH %)" pct={R?.sideeffect_risk?.distribution?.HIGH ?? 0} color={seFlag ? 'bg-red-500' : 'bg-orange-400'} />
+                    <RiskBar label="Composite Risk" pct={(composite ?? 0) * 100} color={composite > 0.66 ? 'bg-red-500' : composite > 0.33 ? 'bg-amber-400' : 'bg-green-400'} />
+                  </div>
+
+                  <div className="flex justify-end">
+                    <button onClick={() => navigate('/risk-results')}
+                      className="flex items-center gap-2 text-sm font-semibold text-cyan-600 dark:text-cyan-400 hover:underline">
+                      View full results <HiArrowRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="flex flex-col items-center py-10 gap-3 text-gray-400">
+                  <HiChartBar className="w-12 h-12 opacity-30" />
+                  <p className="text-sm">No assessment data yet</p>
+                  <button onClick={() => navigate('/risk-assessment')}
+                    className="mt-1 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white text-sm font-semibold rounded-xl transition-all">
+                    Run Assessment
+                  </button>
                 </div>
-                <div className="flex gap-2">
-                  <Button
-                    color="purple"
-                    size="sm"
-                    onClick={handleLoadSample}
-                  >
-                    <HiLightningBolt className="mr-2 h-4 w-4" />
-                    Load Sample
-                  </Button>
-                  <Button
-                    color="gray"
-                    size="sm"
-                    onClick={handleClearForm}
-                  >
-                    <HiTrash className="mr-2 h-4 w-4" />
-                    Clear
-                  </Button>
+              )}
+            </div>
+          </div>
+
+          {/* Quick Actions */}
+          <div className="space-y-4">
+            <h2 className="text-sm font-bold uppercase tracking-widest text-gray-400 px-1">Quick Actions</h2>
+            {ACTIONS.map((a) => (
+              <button key={a.href} onClick={() => navigate(a.href)}
+                className={`w-full text-left rounded-2xl border p-4 flex items-start gap-3 transition-all hover:shadow-md group ${
+                  a.primary
+                    ? 'bg-gradient-to-br from-cyan-600 to-teal-700 border-transparent text-white shadow-lg hover:from-cyan-700 hover:to-teal-800'
+                    : 'bg-white dark:bg-gray-900 border-gray-100 dark:border-gray-800 hover:border-cyan-300 dark:hover:border-cyan-700'
+                }`}>
+                <div className={`p-2.5 rounded-xl flex-shrink-0 ${a.primary ? 'bg-white/20' : a.iconBg}`}>
+                  <a.icon className={`w-5 h-5 ${a.primary ? 'text-white' : 'text-white'}`} />
                 </div>
+                <div className="min-w-0">
+                  <p className={`font-bold text-sm ${a.primary ? 'text-white' : 'text-gray-900 dark:text-white'}`}>{a.title}</p>
+                  <p className={`text-xs mt-0.5 ${a.primary ? 'text-cyan-100' : 'text-gray-500 dark:text-gray-400'}`}>{a.desc}</p>
+                </div>
+                <HiArrowRight className={`w-4 h-4 ml-auto mt-0.5 flex-shrink-0 group-hover:translate-x-0.5 transition-transform ${a.primary ? 'text-white/70' : 'text-gray-300 dark:text-gray-600'}`} />
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/*  Urticaria Type Distribution  */}
+        {hasResult && R?.urticaria_type?.distribution && (
+          <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
+            <div className="bg-gradient-to-r from-indigo-600 to-blue-700 px-5 py-4 flex items-center gap-2">
+              <HiChip className="w-5 h-5 text-white" />
+              <h2 className="text-white font-bold">Urticaria Type  Probability Distribution</h2>
+              <span className="ml-auto text-xs text-indigo-200">GatedFusionMTL  Bio_ClinicalBERT</span>
+            </div>
+            <div className="p-5">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
+                {Object.entries(R.urticaria_type.distribution).map(([type, prob]) => {
+                  const isTop = type === R.urticaria_type.predicted;
+                  return (
+                    <div key={type} className={`rounded-xl p-4 text-center border transition-all ${isTop ? 'bg-indigo-600 border-indigo-500 shadow-lg' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700'}`}>
+                      <p className={`text-xs font-semibold uppercase tracking-wide mb-1 ${isTop ? 'text-indigo-200' : 'text-gray-500'}`}>{type}</p>
+                      <p className={`text-3xl font-extrabold ${isTop ? 'text-white' : 'text-gray-800 dark:text-white'}`}>{prob.toFixed(1)}%</p>
+                      {isTop && <span className="inline-flex items-center gap-1 text-xs mt-1 bg-white/20 text-white px-2 py-0.5 rounded-full font-semibold"><HiCheckCircle className="w-3 h-3"/>Predicted</span>}
+                    </div>
+                  );
+                })}
               </div>
-
-              <form onSubmit={handleSubmit} className="space-y-6">
-                {/* Demographics */}
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 border-b pb-2 border-cyan-200 dark:border-cyan-800">
-                    📋 Demographics
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div>
-                      <Label htmlFor="age" value="Age" />
-                      <TextInput
-                        id="age"
-                        name="age"
-                        type="number"
-                        placeholder="e.g., 24"
-                        value={formData.age}
-                        onChange={handleInputChange}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="gender" value="Gender" />
-                      <Select
-                        id="gender"
-                        name="gender"
-                        value={formData.gender}
-                        onChange={handleInputChange}
-                      >
-                        <option value="">Select gender</option>
-                        <option value="Male">Male</option>
-                        <option value="Female">Female</option>
-                        <option value="Other">Other</option>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label htmlFor="Weight" value="Weight (kg)" />
-                      <TextInput
-                        id="Weight"
-                        name="Weight"
-                        type="number"
-                        step="0.1"
-                        placeholder="e.g., 62"
-                        value={formData.Weight}
-                        onChange={handleInputChange}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="Height" value="Height (cm)" />
-                      <TextInput
-                        id="Height"
-                        name="Height"
-                        type="number"
-                        placeholder="e.g., 168"
-                        value={formData.Height}
-                        onChange={handleInputChange}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Urticaria History */}
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 border-b pb-2 border-cyan-200 dark:border-cyan-800">
-                    🏥 Urticaria History
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="Diagnosed at the age of" value="Diagnosed at Age" />
-                      <TextInput
-                        id="Diagnosed at the age of"
-                        name="Diagnosed at the age of"
-                        type="number"
-                        placeholder="e.g., 23"
-                        value={formData['Diagnosed at the age of']}
-                        onChange={handleInputChange}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="History of Chronic Urticaria" value="History of Chronic Urticaria" />
-                      <Select
-                        id="History of Chronic Urticaria"
-                        name="History of Chronic Urticaria"
-                        value={formData['History of Chronic Urticaria']}
-                        onChange={handleInputChange}
-                      >
-                        <option value="">Select...</option>
-                        <option value="Yes">Yes</option>
-                        <option value="No">No</option>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label htmlFor="Symptoms Of Urticaria" value="Symptoms Of Urticaria" />
-                      <Select
-                        id="Symptoms Of Urticaria"
-                        name="Symptoms Of Urticaria"
-                        value={formData['Symptoms Of Urticaria']}
-                        onChange={handleInputChange}
-                      >
-                        <option value="">Select...</option>
-                        <option value="Wheals">Wheals</option>
-                        <option value="Angioedema">Angioedema</option>
-                        <option value="Both">Both</option>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label htmlFor="Duration of Symptoms of urticaria" value="Duration of Symptoms" />
-                      <Select
-                        id="Duration of Symptoms of urticaria"
-                        name="Duration of Symptoms of urticaria"
-                        value={formData['Duration of Symptoms of urticaria']}
-                        onChange={handleInputChange}
-                      >
-                        <option value="">Select...</option>
-                        <option value="Less than 6 weeks">Less than 6 weeks</option>
-                        <option value="More than 6 weeks">More than 6 weeks</option>
-                      </Select>
-                    </div>
-                    <div className="md:col-span-2">
-                      <Label htmlFor="Which time of the day do the symptoms occur?" value="When do symptoms occur?" />
-                      <Select
-                        id="Which time of the day do the symptoms occur?"
-                        name="Which time of the day do the symptoms occur?"
-                        value={formData['Which time of the day do the symptoms occur?']}
-                        onChange={handleInputChange}
-                      >
-                        <option value="">Select...</option>
-                        <option value="Morning">Morning</option>
-                        <option value="Afternoon">Afternoon</option>
-                        <option value="Evening">Evening</option>
-                        <option value="Night">Night</option>
-                        <option value="Only after trigger">Only after trigger</option>
-                        <option value="All day">All day</option>
-                      </Select>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Family History */}
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 border-b pb-2 border-cyan-200 dark:border-cyan-800">
-                    👨‍👩‍👧‍👦 Family History
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <Label htmlFor="Family History of Urticaria" value="Urticaria in Family" />
-                      <Select
-                        id="Family History of Urticaria"
-                        name="Family History of Urticaria"
-                        value={formData['Family History of Urticaria']}
-                        onChange={handleInputChange}
-                      >
-                        <option value="">Select...</option>
-                        <option value="Yes">Yes</option>
-                        <option value="No">No</option>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label htmlFor="Family history of thyroid diseases" value="Thyroid Diseases in Family" />
-                      <Select
-                        id="Family history of thyroid diseases"
-                        name="Family history of thyroid diseases"
-                        value={formData['Family history of thyroid diseases']}
-                        onChange={handleInputChange}
-                      >
-                        <option value="">Select...</option>
-                        <option value="Yes">Yes</option>
-                        <option value="No">No</option>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label htmlFor="Family history of autoimmune diseases" value="Autoimmune Diseases in Family" />
-                      <Select
-                        id="Family history of autoimmune diseases"
-                        name="Family history of autoimmune diseases"
-                        value={formData['Family history of autoimmune diseases']}
-                        onChange={handleInputChange}
-                      >
-                        <option value="">Select...</option>
-                        <option value="Yes">Yes</option>
-                        <option value="No">No</option>
-                      </Select>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Lab Results */}
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 border-b pb-2 border-cyan-200 dark:border-cyan-800">
-                    🧪 Laboratory Results
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="CRP" value="CRP (mg/L)" />
-                      <TextInput
-                        id="CRP"
-                        name="CRP"
-                        type="number"
-                        step="0.1"
-                        placeholder="e.g., 1.0"
-                        value={formData.CRP}
-                        onChange={handleInputChange}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="IgE" value="IgE (IU/mL)" />
-                      <TextInput
-                        id="IgE"
-                        name="IgE"
-                        type="number"
-                        step="0.1"
-                        placeholder="e.g., 70"
-                        value={formData.IgE}
-                        onChange={handleInputChange}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="FT4" value="FT4 (ng/dL)" />
-                      <TextInput
-                        id="FT4"
-                        name="FT4"
-                        type="number"
-                        step="0.1"
-                        placeholder="e.g., 1.2"
-                        value={formData.FT4}
-                        onChange={handleInputChange}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="VitD" value="Vitamin D (ng/mL)" />
-                      <TextInput
-                        id="VitD"
-                        name="VitD"
-                        type="number"
-                        step="0.1"
-                        placeholder="e.g., 28"
-                        value={formData.VitD}
-                        onChange={handleInputChange}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Clinical Assessment */}
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 border-b pb-2 border-cyan-200 dark:border-cyan-800">
-                    🩺 Clinical Assessment
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="urticaria_activity_score" value="Urticaria Activity Score (0-10)" />
-                      <TextInput
-                        id="urticaria_activity_score"
-                        name="urticaria_activity_score"
-                        type="number"
-                        min="0"
-                        max="10"
-                        placeholder="e.g., 7"
-                        value={formData.urticaria_activity_score}
-                        onChange={handleInputChange}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="If  angioedema is present" value="Angioedema Present?" />
-                      <Select
-                        id="If  angioedema is present"
-                        name="If  angioedema is present"
-                        value={formData['If  angioedema is present']}
-                        onChange={handleInputChange}
-                      >
-                        <option value="">Select...</option>
-                        <option value="Yes">Yes</option>
-                        <option value="No">No</option>
-                      </Select>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Clinical Notes */}
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 border-b pb-2 border-cyan-200 dark:border-cyan-800">
-                    📝 Clinical Notes
-                  </h3>
-                  <div className="space-y-4">
-                    <div>
-                      <Label htmlFor="symptoms_raw" value="Symptoms Description (Optional)" />
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                        What does the patient experience? (itching intensity, rash appearance, swelling location, timing)
-                      </p>
-                      <Textarea
-                        id="symptoms_raw"
-                        name="symptoms_raw"
-                        placeholder="Example: Severe itching with raised red welts on arms and torso, worse at night and after hot showers"
-                        rows={2}
-                        value={formData.symptoms_raw}
-                        onChange={handleInputChange}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="investigations_raw" value="Investigation Results (Optional)" />
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                        Any tests performed? (blood work findings, allergy tests, imaging)
-                      </p>
-                      <Textarea
-                        id="investigations_raw"
-                        name="investigations_raw"
-                        placeholder="Example: Elevated IgE levels, positive skin prick test for dust mites"
-                        rows={2}
-                        value={formData.investigations_raw}
-                        onChange={handleInputChange}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="previous_treatments" value="Previous Treatments (Optional)" />
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                        What medications or therapies were tried? What was the result?
-                      </p>
-                      <Textarea
-                        id="previous_treatments"
-                        name="previous_treatments"
-                        placeholder="Example: Cetirizine 10mg daily for 3 weeks - minimal improvement. Tried avoiding dairy - no change"
-                        rows={2}
-                        value={formData.previous_treatments}
-                        onChange={handleInputChange}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="medical_history" value="Relevant Medical History (Optional)" />
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                        Other health conditions, allergies, or family history relevant to this case
-                      </p>
-                      <Textarea
-                        id="medical_history"
-                        name="medical_history"
-                        placeholder="Example: Has asthma and seasonal allergies. Mother has autoimmune thyroid disease. No food allergies known"
-                        rows={2}
-                        value={formData.medical_history}
-                        onChange={handleInputChange}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Submit Button */}
-                <div className="flex justify-end pt-4">
-                  <Button
-                    type="submit"
-                    size="lg"
-                    className="bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-700 hover:to-teal-700"
-                  >
-                    <HiChartBar className="mr-2 h-5 w-5" />
-                    Generate Risk Assessment
-                  </Button>
-                </div>
-              </form>
-            </Card>
+              <div className="space-y-2">
+                {Object.entries(R.urticaria_type.distribution).map(([type, prob]) => (
+                  <RiskBar key={type} label={type} pct={prob}
+                    color={type === R.urticaria_type.predicted ? 'bg-indigo-500' : 'bg-gray-300 dark:bg-gray-600'} />
+                ))}
+              </div>
+            </div>
+          </div>
         )}
 
-        {/* Results Display */}
-        {showResults && (
-          <RiskDashboard patientData={patientData} />
-        )}
+        {/*  Clinical Reference  */}
+        <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
+          <div className="bg-gradient-to-r from-slate-700 to-gray-800 px-5 py-4 flex items-center gap-2">
+            <HiBeaker className="w-5 h-5 text-white" />
+            <h2 className="text-white font-bold">Clinical Reference  AURA Decision Thresholds</h2>
+          </div>
+          <div className="p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {GUIDANCE.map((g) => (
+              <div key={g.tag} className="flex items-start gap-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+                <span className="inline-block mt-0.5 px-2 py-0.5 text-xs font-bold rounded-md bg-cyan-100 text-cyan-700 dark:bg-cyan-900/50 dark:text-cyan-300 flex-shrink-0">{g.tag}</span>
+                <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">{g.note}</p>
+              </div>
+            ))}
+            <div className="flex items-start gap-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+              <span className="inline-block mt-0.5 px-2 py-0.5 text-xs font-bold rounded-md bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300 flex-shrink-0">Severity  6</span>
+              <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">SEVERE band  consider biologic therapy escalation (omalizumab 300 mg q4w).</p>
+            </div>
+            <div className="flex items-start gap-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+              <span className="inline-block mt-0.5 px-2 py-0.5 text-xs font-bold rounded-md bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300 flex-shrink-0">Composite &gt; 55%</span>
+              <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">HIGH composite  close monitoring, consider biologics or second-line agents.</p>
+            </div>
+          </div>
+        </div>
+
+        {/*  Model info footer  */}
+        <div className="text-center pb-4 space-y-1">
+          <p className="text-xs text-gray-400">Powered by <span className="font-semibold text-gray-500 dark:text-gray-300">GatedFusionMTL</span>  Multi-Task Learning with Bio_ClinicalBERT text encoder + tabular residual network</p>
+          <p className="text-xs text-gray-400">4 simultaneous outputs: Urticaria Type  Severity Score  Side-Effect Risk  Secondary Disease Risk</p>
+        </div>
       </div>
     </div>
   );
