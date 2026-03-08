@@ -1,0 +1,349 @@
+import { useEffect, useMemo, useState } from "react"
+import {
+  Button,
+  Card,
+  Spinner,
+  Table,
+} from "flowbite-react"
+import { FaBars, FaSyncAlt, FaTimes, FaEye } from "react-icons/fa"
+import ActiveLearningSidebar from "../components/active-learning/ActiveLearningSidebar"
+import DashboardShell from "../components/active-learning/DashboardShell"
+import PageHeader from "../components/active-learning/PageHeader"
+import StatusPill from "../components/models/StatusPill"
+import FeatureColumnsAccordion from "../components/models/FeatureColumnsAccordion"
+import ModelDetailsDrawer from "../components/models/ModelDetailsDrawer"
+import {
+  getCurrentDeployedModelInsights,
+  getModelRegistryById,
+  listModelRegistry,
+  type ModelInfo,
+} from "../services/modelsApi"
+
+const formatDateTime = (value?: string) => {
+  if (!value) return "Not available"
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleString()
+}
+
+const formatMetric = (value?: number) => {
+  if (typeof value !== "number" || Number.isNaN(value)) return "Not available"
+  return `${Math.round(value * 100)}%`
+}
+
+const toPercent = (value?: number) => {
+  if (typeof value !== "number" || Number.isNaN(value)) return null
+  return Math.round(value * 100)
+}
+
+const ModelRegistryPage = () => {
+  const [currentModel, setCurrentModel] = useState<ModelInfo | null>(null)
+  const [models, setModels] = useState<ModelInfo[]>([])
+  const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [detailsModel, setDetailsModel] = useState<ModelInfo | null>(null)
+  const [showSidebar, setShowSidebar] = useState(true)
+
+  const hasRetraining = useMemo(() => {
+    if (currentModel?.status === "RETRAINING") return true
+    return models.some((model) => model.status === "RETRAINING")
+  }, [currentModel, models])
+
+  const loadModels = async () => {
+    const [currentModelResult, recordsResult] = await Promise.allSettled([
+      getCurrentDeployedModelInsights(),
+      listModelRegistry(),
+    ])
+
+    const records =
+      recordsResult.status === "fulfilled" ? recordsResult.value : []
+    const ordered = [...records].sort((a, b) => {
+      const aTime = new Date(a.trainedAt || 0).getTime()
+      const bTime = new Date(b.trainedAt || 0).getTime()
+      return bTime - aTime
+    })
+
+    const deployedModel =
+      ordered.find((model) => model.promoted) ||
+      ordered.find((model) => model.status === "DEPLOYED") ||
+      ordered[0] ||
+      null
+
+    const nextCurrentModel =
+      currentModelResult.status === "fulfilled"
+        ? currentModelResult.value
+        : deployedModel || null
+    const nextModels = ordered
+
+    setCurrentModel(nextCurrentModel)
+    setModels(nextModels)
+
+    if (currentModelResult.status === "rejected" && recordsResult.status === "rejected") {
+      throw currentModelResult.reason || recordsResult.reason
+    }
+  }
+
+  const handleRefresh = async () => {
+    setRefreshing(true)
+    setError(null)
+    try {
+      await loadModels()
+    } catch (fetchError) {
+      const message = fetchError instanceof Error ? fetchError.message : "Failed to load models"
+      setError(message)
+      setCurrentModel(null)
+      setModels([])
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
+  useEffect(() => {
+    const init = async () => {
+      setLoading(true)
+      setError(null)
+      try {
+        await loadModels()
+      } catch (fetchError) {
+        const message = fetchError instanceof Error ? fetchError.message : "Failed to load models"
+        setError(message)
+        setCurrentModel(null)
+        setModels([])
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    init()
+  }, [])
+
+  useEffect(() => {
+    if (!hasRetraining) return
+    const interval = setInterval(() => {
+      handleRefresh()
+    }, 5000)
+    return () => clearInterval(interval)
+  }, [hasRetraining])
+
+  const handleViewDetails = async (model: ModelInfo) => {
+    setDetailsModel(model)
+    if (!model.id) return
+    try {
+      const nextModel = await getModelRegistryById(model.id)
+      setDetailsModel(nextModel)
+    } catch (fetchError) {
+      const message = fetchError instanceof Error ? fetchError.message : "Failed to load model details"
+      setError(message)
+    }
+  }
+
+  const header = (
+    <PageHeader
+      eyebrow="Admin Dashboard"
+      title="Model Retraining and Registry"
+      subtitle="Monitor retraining jobs and manage deployable model versions"
+      actions={
+        <div className="flex flex-wrap items-center gap-2">
+          <Button color="gray" onClick={handleRefresh} disabled={refreshing}>
+            <span className="sr-only">
+              {refreshing ? "Refreshing" : "Refresh"}
+            </span>
+            <FaSyncAlt className={refreshing ? "animate-spin" : ""} />
+          </Button>
+          <Button
+            color="gray"
+            pill
+            onClick={() => setShowSidebar((prev) => !prev)}
+            aria-label={showSidebar ? "Hide navigation" : "Show navigation"}
+          >
+            {showSidebar ? <FaTimes /> : <FaBars />}
+          </Button>
+        </div>
+      }
+    />
+  )
+
+  const contentClassName = showSidebar
+    ? "mx-auto w-full max-w-6xl space-y-6 px-4 py-6"
+    : "w-full space-y-6 px-2 py-6"
+
+  return (
+    <DashboardShell
+      header={header}
+      sidebar={showSidebar ? <ActiveLearningSidebar /> : null}
+    >
+      <div className={contentClassName}>
+        {error && (
+          <Card className="border border-rose-200 bg-rose-50 text-rose-700">
+            {error}
+          </Card>
+        )}
+
+        {loading ? (
+          <div className="flex items-center gap-2 text-sm text-slate-600">
+            <Spinner size="sm" /> Loading models
+          </div>
+        ) : (
+          <div className="space-y-6">
+            <Card>
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">
+                    Current Deployed Model
+                  </p>
+                  <h2 className="text-xl font-semibold text-slate-900">
+                    {currentModel?.modelVersion || "No current model deployed yet"}
+                  </h2>
+                  {currentModel ? (
+                    <>
+                      <p className="mt-1 text-sm text-slate-600">
+                        Trained at {formatDateTime(currentModel.trainedAt)}
+                      </p>
+                      <p className="text-sm text-slate-600">
+                        Trained on {currentModel.trainedOnCases ?? "Not available"} cases
+                      </p>
+                    </>
+                  ) : null}
+                </div>
+                {currentModel && <StatusPill status={currentModel.status} />}
+            </div>
+            <div className="mt-5 space-y-4">
+              <div className="rounded-lg border border-slate-200 bg-white p-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold text-slate-700">
+                    Metrics Overview
+                  </p>
+                  <p className="text-xs text-slate-500">Percent</p>
+                </div>
+                <div className="mt-3 flex flex-col gap-3 text-sm text-slate-600">
+                  {[
+                    { label: "Accuracy", value: toPercent(currentModel?.metrics?.accuracy) },
+                    { label: "Macro F1", value: toPercent(currentModel?.metrics?.macro_f1) },
+                    { label: "Step Accuracy", value: toPercent(currentModel?.metrics?.step_accuracy) },
+                  ].map((metric) => (
+                    <div key={metric.label} className="flex items-center gap-3">
+                      <span className="w-28 text-xs uppercase tracking-wide text-slate-500">
+                        {metric.label}
+                      </span>
+                      <div className="h-2 w-full max-w-[320px] rounded-full bg-slate-100">
+                        <div
+                          className="h-2 rounded-full bg-sky-400"
+                          style={{ width: `${metric.value ?? 0}%` }}
+                        />
+                      </div>
+                      <span className="w-12 text-right text-sm text-slate-700">
+                        {metric.value === null ? "N/A" : `${metric.value}%`}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <FeatureColumnsAccordion columns={currentModel?.featureColumns} />
+            </div>
+          </Card>
+
+          <Card>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-500">
+                  All Models
+                </p>
+                <h2 className="text-lg font-semibold text-slate-900">
+                  Registry
+                </h2>
+              </div>
+              <p className="text-sm text-slate-500">
+                {models.length} total models
+              </p>
+            </div>
+
+            {models.length === 0 ? (
+              <p className="mt-4 text-sm text-slate-500">No models available</p>
+            ) : (
+                <div className="mt-4 overflow-x-auto">
+                  <Table>
+                  <Table.Head>
+                    <Table.HeadCell>Version</Table.HeadCell>
+                    <Table.HeadCell>Status</Table.HeadCell>
+                    <Table.HeadCell>Trained At</Table.HeadCell>
+                    <Table.HeadCell>Trained On Cases</Table.HeadCell>
+                    <Table.HeadCell>Metrics</Table.HeadCell>
+                    <Table.HeadCell>Macro F1</Table.HeadCell>
+                    <Table.HeadCell>Step Accuracy</Table.HeadCell>
+                    <Table.HeadCell />
+                  </Table.Head>
+                    <Table.Body className="divide-y">
+                      {models.map((model) => (
+                        <Table.Row key={model.id || model.modelVersion}>
+                          <Table.Cell className="font-semibold text-slate-900">
+                            {model.modelVersion}
+                          </Table.Cell>
+                          <Table.Cell>
+                            <StatusPill status={model.status} />
+                          </Table.Cell>
+                          <Table.Cell>{formatDateTime(model.trainedAt)}</Table.Cell>
+                        <Table.Cell>
+                          {model.trainedOnCases ?? "Not available"}
+                        </Table.Cell>
+                        <Table.Cell>
+                          <div className="flex flex-col gap-2 text-xs text-slate-500">
+                            {[
+                              { label: "Acc", value: toPercent(model.metrics?.accuracy) },
+                              { label: "F1", value: toPercent(model.metrics?.macro_f1) },
+                              { label: "Step", value: toPercent(model.metrics?.step_accuracy) },
+                            ].map((metric) => (
+                              <div key={metric.label} className="flex items-center gap-2">
+                                <span className="w-8">{metric.label}</span>
+                                <div className="h-2 w-24 rounded-full bg-slate-100">
+                                  <div
+                                    className="h-2 rounded-full bg-sky-400"
+                                    style={{
+                                      width: `${metric.value ?? 0}%`,
+                                    }}
+                                  />
+                                </div>
+                                <span className="w-10 text-slate-600">
+                                  {metric.value === null ? "N/A" : `${metric.value}%`}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </Table.Cell>
+                        <Table.Cell>
+                          {formatMetric(model.metrics?.macro_f1)}
+                        </Table.Cell>
+                          <Table.Cell>
+                            {formatMetric(model.metrics?.step_accuracy)}
+                          </Table.Cell>
+                          <Table.Cell>
+                            <Button
+                              color="gray"
+                              size="xs"
+                              onClick={() => handleViewDetails(model)}
+                              aria-label={`View details for ${model.modelVersion}`}
+                            >
+                              <FaEye />
+                            </Button>
+                          </Table.Cell>
+                        </Table.Row>
+                      ))}
+                    </Table.Body>
+                  </Table>
+                </div>
+              )}
+            </Card>
+          </div>
+        )}
+
+        <ModelDetailsDrawer
+          model={detailsModel}
+          open={Boolean(detailsModel)}
+          onClose={() => setDetailsModel(null)}
+        />
+      </div>
+    </DashboardShell>
+  )
+}
+
+export default ModelRegistryPage
