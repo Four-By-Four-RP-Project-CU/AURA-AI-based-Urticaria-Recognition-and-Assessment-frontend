@@ -6,7 +6,9 @@ import {
   FaChevronRight,
   FaTachometerAlt,
   FaMicroscope,
-  FaHistory
+  FaHistory,
+  FaShieldAlt,
+  FaBolt,
 } from 'react-icons/fa';
 
 const DashboardSidebar = () => {
@@ -41,7 +43,23 @@ const DashboardSidebar = () => {
       icon: FaHistory,
       color: 'text-teal-500',
       bgColor: 'bg-teal-50 dark:bg-teal-900/20'
-    }
+    },
+    // ── IT22607232 — Risk & Side-Effect Profiling ──────────────────────────
+    {
+      name: 'Risk Assessment Wizard',
+      path: '/risk-assessment',
+      icon: FaBolt,
+      color: 'text-cyan-600',
+      bgColor: 'bg-cyan-50 dark:bg-cyan-900/20',
+      divider: true,
+    },
+    {
+      name: 'Risk Dashboard',
+      path: '/risk-dashboard',
+      icon: FaShieldAlt,
+      color: 'text-violet-600',
+      bgColor: 'bg-violet-50 dark:bg-violet-900/20'
+    },
   ];
 
   return (
@@ -78,24 +96,35 @@ const DashboardSidebar = () => {
           const isActive = location.pathname === item.path;
 
           return (
-            <Link
-              key={item.path}
-              to={item.path}
-              className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
-                isActive
-                  ? `${item.bgColor} ${item.color} font-semibold`
-                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-              }`}
-              title={isCollapsed ? item.name : ''}
-            >
-              <Icon className={`text-xl ${isActive ? item.color : ''}`} />
-              {!isCollapsed && (
-                <span className="text-sm">{item.name}</span>
-              )}
-              {isActive && !isCollapsed && (
-                <div className="ml-auto w-2 h-2 rounded-full bg-current"></div>
-              )}
-            </Link>
+            <React.Fragment key={item.path}>
+              {/* {item.divider && (
+                <div className="pt-2 pb-1">
+                  {!isCollapsed && (
+                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 px-1 mb-1">
+                      Risk Profiling
+                    </p>
+                  )}
+                  <hr className="border-gray-200 dark:border-gray-700" />
+                </div>
+              )} */}
+              <Link
+                to={item.path}
+                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
+                  isActive
+                    ? `${item.bgColor} ${item.color} font-semibold`
+                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                }`}
+                title={isCollapsed ? item.name : ''}
+              >
+                <Icon className={`text-xl ${isActive ? item.color : ''}`} />
+                {!isCollapsed && (
+                  <span className="text-sm">{item.name}</span>
+                )}
+                {isActive && !isCollapsed && (
+                  <div className="ml-auto w-2 h-2 rounded-full bg-current"></div>
+                )}
+              </Link>
+            </React.Fragment>
           );
         })}
       </nav>

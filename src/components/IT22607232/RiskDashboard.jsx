@@ -1,3 +1,5 @@
+// RiskDashboard — lightweight summary widget used inside DashboardNew.jsx
+// Full interactive results live at /risk-results (RiskResultsPage.jsx)
 import React, { useState, useEffect } from 'react';
 import { Card, Badge, Progress, Alert, Spinner } from 'flowbite-react';
 import { 
@@ -38,10 +40,46 @@ export default function RiskDashboard({ patientData }) {
     setAnimateCards(false);
 
     try {
+      // Build the PredictRequest body matching the actual backend schema
+      const catKeys = [
+        'Sex','History of Chronic Urticaria','Symptoms Of Urticaria',
+        'Duration of Symptoms of urticaria','If Wheals are present',
+        'The shape of an individual wheal','Size of a single Wheal',
+        'No. of wheals','Duration of wheal','Location',
+        'If  angioedema is present','Duration of angioedema',
+        'Discomfort of Swelling','Affect of Swelling on Daily activities',
+        'Angioedema affect on appearance','Overall affect of Swelling',
+        'Which applies to your wheals/angioedema or both?',
+        'Which of the following applies to your symptoms of urticaria?',
+        'Which time of the day do the symptoms occur?',
+        'Symptoms of Autoinflamation:','Alpha Gal','Specify other allergy',
+        'Remission of Angioedema after discontinuation of the drug:',
+        'Family History of Urticaria','Family history of thyroid diseases',
+        'Family history of autoimmune diseases',
+      ];
+      const categorical = {};
+      catKeys.forEach((k) => { if (patientData[k]) categorical[k] = patientData[k]; });
+      if (patientData.gender) categorical['Sex'] = patientData.gender;
+
+      const body = {
+        symptoms_raw: patientData.symptoms_raw || '',
+        investigations_raw: patientData.investigations_raw || '',
+        categorical,
+      };
+      if (patientData.Age)      body.Age = Number(patientData.Age);
+      if (patientData.age)      body.Age = Number(patientData.age);
+      if (patientData.Weight)   body.Weight = Number(patientData.Weight);
+      if (patientData.Height)   body.Height = Number(patientData.Height);
+      if (patientData['Diagnosed at the age of']) body.diagnosed_age = Number(patientData['Diagnosed at the age of']);
+      if (patientData.CRP)      body.CRP = Number(patientData.CRP);
+      if (patientData.FT4)      body.FT4 = Number(patientData.FT4);
+      if (patientData.IgE)      body.IgE = Number(patientData.IgE);
+      if (patientData.VitD)     body.VitD = Number(patientData.VitD);
+
       const response = await fetch('http://localhost:8000/predict', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ features: patientData })
+        body: JSON.stringify(body),
       });
 
       if (!response.ok) {
@@ -58,16 +96,20 @@ export default function RiskDashboard({ patientData }) {
     }
   };
 
-  // Decision Status Card
-  const DecisionCard = () => {
-    const isAbstain = result?.abstain || false;
-    const decision = result?.final_decision || 'UNKNOWN';
-    
+  // ── Summary Card (replaces old "Decision" card to match real schema) ─────────
+  const SummaryCard = () => {
+    const composite = result?.composite_risk_score ?? 0;
+    const interp    = result?.clinical_interpretation ?? '';
+    const seFlag    = result?.sideeffect_risk?.high_risk_flag ?? false;
+    const thyFlag   = result?.secondary_disease_risk?.thyroid_flag ?? false;
+    const autFlag   = result?.secondary_disease_risk?.autoimmune_flag ?? false;
+    const hasFlag   = seFlag || thyFlag || autFlag;
+
     return (
       <Card className={`transform transition-all duration-700 ${animateCards ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            {isAbstain ? (
+            {hasFlag ? (
               <div className="p-4 bg-gradient-to-br from-yellow-500 to-orange-500 rounded-xl">
                 <HiExclamation className="text-4xl text-white" />
               </div>
@@ -78,50 +120,43 @@ export default function RiskDashboard({ patientData }) {
             )}
             <div>
               <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
-                Clinical Decision
+                Risk Assessment Complete
               </h3>
               <p className="text-gray-600 dark:text-gray-400">
-                {isAbstain ? 'Requires Manual Review' : 'AI-Assisted Prediction'}
+                {hasFlag ? 'Clinical attention recommended' : 'AI-Assisted Multi-Task Prediction'}
               </p>
             </div>
           </div>
-          <Badge 
-            color={isAbstain ? 'warning' : 'success'} 
-            size="xl"
-            className="px-6 py-3 text-lg font-bold"
-          >
-            {decision}
-          </Badge>
+          <div className="text-right">
+            <p className="text-xs text-gray-500 mb-1">Composite Risk</p>
+            <p className={`text-3xl font-extrabold ${composite > 0.66 ? 'text-red-600' : composite > 0.33 ? 'text-amber-500' : 'text-green-600'}`}>
+              {(composite * 100).toFixed(0)}%
+            </p>
+          </div>
         </div>
-        
-        {result?.abstain_reason && (
-          <Alert color="warning" icon={HiInformationCircle} className="mt-4">
-            <span className="font-semibold">Abstention Reason: </span>
-            {result.abstain_reason}
+
+        {interp && (
+          <Alert color="info" icon={HiInformationCircle} className="mt-4">
+            <span className="font-semibold">Clinical Interpretation: </span>
+            {interp}
           </Alert>
         )}
 
-        {/* Confidence Metrics */}
-        <div className="grid grid-cols-2 gap-4 mt-4">
-          <div className="bg-gradient-to-br from-cyan-50 to-teal-50 dark:from-gray-800 dark:to-gray-700 rounded-lg p-4">
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Type Confidence</p>
-            <p className="text-3xl font-bold text-cyan-600 dark:text-cyan-400">
-              {(result?.confidence?.type_confidence * 100).toFixed(1)}%
-            </p>
-            <Progress 
-              progress={(result?.confidence?.type_confidence * 100)} 
-              color="cyan"
-              className="mt-2"
-            />
+        <div className="grid grid-cols-3 gap-3 mt-4">
+          <div className="bg-gradient-to-br from-cyan-50 to-teal-50 dark:from-gray-800 dark:to-gray-700 rounded-lg p-3 text-center">
+            <p className="text-xs text-gray-500 mb-1">Composite Risk</p>
+            <p className="text-2xl font-bold text-cyan-600 dark:text-cyan-400">{(composite * 100).toFixed(0)}%</p>
+            <Progress progress={composite * 100} color="cyan" className="mt-2" />
           </div>
-          <div className="bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-gray-800 dark:to-gray-700 rounded-lg p-4">
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Prediction Entropy</p>
-            <p className="text-3xl font-bold text-purple-600 dark:text-purple-400">
-              {result?.confidence?.type_entropy?.toFixed(3)}
-            </p>
-            <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-              Lower is better (threshold: {result?.confidence?.thresholds?.type_entropy_thresh?.toFixed(2)})
-            </p>
+          <div className="bg-gradient-to-br from-pink-50 to-rose-50 dark:from-gray-800 dark:to-gray-700 rounded-lg p-3 text-center">
+            <p className="text-xs text-gray-500 mb-1">Thyroid Risk</p>
+            <p className="text-2xl font-bold text-pink-600 dark:text-pink-400">{(result?.secondary_disease_risk?.thyroid_risk_pct ?? 0).toFixed(1)}%</p>
+            <Progress progress={result?.secondary_disease_risk?.thyroid_risk_pct ?? 0} color="pink" className="mt-2" />
+          </div>
+          <div className="bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-gray-800 dark:to-gray-700 rounded-lg p-3 text-center">
+            <p className="text-xs text-gray-500 mb-1">Autoimmune Risk</p>
+            <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">{(result?.secondary_disease_risk?.autoimmune_risk_pct ?? 0).toFixed(1)}%</p>
+            <Progress progress={result?.secondary_disease_risk?.autoimmune_risk_pct ?? 0} color="purple" className="mt-2" />
           </div>
         </div>
       </Card>
@@ -131,8 +166,11 @@ export default function RiskDashboard({ patientData }) {
   // Urticaria Type Card
   const UrticariaTypeCard = () => {
     const typeData = result?.urticaria_type || {};
-    const probs = typeData.probs || {};
-    const sortedProbs = Object.entries(probs).sort((a, b) => b[1] - a[1]);
+    // backend returns: predicted, confidence_pct, distribution (dict label→pct)
+    const predicted = typeData.predicted ?? typeData.pred ?? '—';
+    const confPct   = typeData.confidence_pct ?? 0;
+    const dist      = typeData.distribution ?? typeData.probs ?? {};
+    const sortedProbs = Object.entries(dist).sort((a, b) => b[1] - a[1]);
 
     return (
       <Card className={`transform transition-all duration-700 delay-100 ${animateCards ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
@@ -148,12 +186,8 @@ export default function RiskDashboard({ patientData }) {
 
         <div className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white rounded-xl p-6 mb-4">
           <p className="text-sm opacity-90 mb-2">Predicted Type</p>
-          <p className="text-3xl font-bold">{typeData.pred}</p>
-          {typeData.pred !== typeData.raw_pred && (
-            <p className="text-sm mt-2 opacity-80">
-              Raw prediction: {typeData.raw_pred}
-            </p>
-          )}
+          <p className="text-3xl font-bold">{predicted}</p>
+          <p className="text-sm mt-1 opacity-80">Confidence: {confPct.toFixed(1)}%</p>
         </div>
 
         <div className="space-y-3">
@@ -180,18 +214,21 @@ export default function RiskDashboard({ patientData }) {
 
   // Side Effect Risk Card
   const SideEffectCard = () => {
-    const sideData = result?.side_effect_risk_proxy || {};
-    const probs = sideData.probs || {};
-    const riskLevel = sideData.pred || 'UNKNOWN';
+    // backend: sideeffect_risk.level, sideeffect_risk.distribution, sideeffect_risk.high_risk_flag
+    const sideData = result?.sideeffect_risk || result?.side_effect_risk_proxy || {};
+    const dist     = sideData.distribution || sideData.probs || {};
+    const riskLevel = sideData.level || sideData.pred || 'UNKNOWN';
+    const highFlag  = sideData.high_risk_flag ?? false;
 
     const getRiskColor = (level) => {
-      if (level.includes('LOW')) return { bg: 'from-green-500 to-emerald-500', badge: 'success' };
-      if (level.includes('MED')) return { bg: 'from-yellow-500 to-orange-500', badge: 'warning' };
+      if (level.includes('LOW'))  return { bg: 'from-green-500 to-emerald-500', badge: 'success' };
+      if (level.includes('MOD'))  return { bg: 'from-yellow-500 to-orange-500', badge: 'warning' };
       if (level.includes('HIGH')) return { bg: 'from-red-500 to-pink-500', badge: 'failure' };
       return { bg: 'from-gray-500 to-slate-500', badge: 'gray' };
     };
 
     const colors = getRiskColor(riskLevel);
+    const probs = dist;  // keep name for the JSX below
 
     return (
       <Card className={`transform transition-all duration-700 delay-200 ${animateCards ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
@@ -210,12 +247,17 @@ export default function RiskDashboard({ patientData }) {
           <p className="text-4xl font-bold">{riskLevel}</p>
         </div>
 
+        {highFlag && (
+          <div className="mb-3 flex items-center gap-2 text-xs font-semibold text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-lg">
+            <HiExclamation className="w-4 h-4" /> High-Risk Flag Raised — Clinical Review Recommended
+          </div>
+        )}
         <div className="grid grid-cols-3 gap-3">
           {Object.entries(probs).map(([level, prob]) => (
             <div key={level} className="text-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
               <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">{level}</p>
               <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                {(prob * 100).toFixed(0)}%
+                {typeof prob === 'number' ? prob.toFixed(1) : prob}%
               </p>
             </div>
           ))}
@@ -226,11 +268,12 @@ export default function RiskDashboard({ patientData }) {
 
   // Severity Gauge Card
   const SeverityCard = () => {
+    // backend: severity.predicted_score, severity.uncertainty_95ci, severity.band, severity.description
     const severity = result?.severity || {};
-    const mu = severity.mu || 0;
-    const ci95 = severity.ci95 || [0, 0];
-    const range = severity.range || [0, 10];
-    const percentage = ((mu - range[0]) / (range[1] - range[0])) * 100;
+    const mu   = severity.predicted_score ?? severity.mu ?? 0;
+    const ci95 = severity.uncertainty_95ci ?? severity.ci95 ?? [0, 0];
+    const band = severity.band ?? '';
+    const percentage = (mu / 10) * 100;
 
     const getSeverityColor = (value) => {
       if (value < 3) return 'from-green-400 to-emerald-500';
@@ -286,15 +329,15 @@ export default function RiskDashboard({ patientData }) {
             <p className="text-6xl font-bold text-gray-900 dark:text-white">
               {mu.toFixed(1)}
             </p>
-            <p className="text-sm text-gray-600 dark:text-gray-400">out of {range[1]}</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400">out of 10 &nbsp;&bull;&nbsp; <span className="font-semibold">{band}</span></p>
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
           <div className="text-center p-3 bg-gradient-to-br from-cyan-50 to-teal-50 dark:from-gray-800 dark:to-gray-700 rounded-lg">
-            <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Variance</p>
+            <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Severity Band</p>
             <p className="text-xl font-bold text-gray-900 dark:text-white">
-              {severity.var?.toFixed(3)}
+              {band || '—'}
             </p>
           </div>
           <div className="text-center p-3 bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-gray-800 dark:to-gray-700 rounded-lg">
@@ -310,7 +353,12 @@ export default function RiskDashboard({ patientData }) {
 
   // Secondary Risk Card
   const SecondaryRiskCard = () => {
-    const risks = result?.secondary_risk || {};
+    // backend: secondary_disease_risk.thyroid_risk_pct, autoimmune_risk_pct, thyroid_flag, autoimmune_flag
+    const sec = result?.secondary_disease_risk || result?.secondary_risk || {};
+    const risks = {
+      'Thyroid Disease': sec.thyroid_risk_pct ?? 0,
+      'Autoimmune Disease': sec.autoimmune_risk_pct ?? 0,
+    };
     const entries = Object.entries(risks).sort((a, b) => b[1] - a[1]);
 
     return (
@@ -327,8 +375,9 @@ export default function RiskDashboard({ patientData }) {
 
         <div className="space-y-4">
           {entries.map(([riskType, probability], idx) => {
-            const isHigh = probability > 0.6;
-            const isMedium = probability > 0.3 && probability <= 0.6;
+            // backend returns percentages (0–100), not fractions
+            const isHigh   = probability > 60;
+            const isMedium = probability > 30 && probability <= 60;
             
             return (
               <div 
@@ -358,11 +407,11 @@ export default function RiskDashboard({ patientData }) {
                     color={isHigh ? 'failure' : isMedium ? 'warning' : 'success'}
                     size="lg"
                   >
-                    {(probability * 100).toFixed(1)}%
+                    {probability.toFixed(1)}%
                   </Badge>
                 </div>
                 <Progress 
-                  progress={probability * 100} 
+                  progress={probability} 
                   color={isHigh ? 'red' : isMedium ? 'yellow' : 'green'}
                   size="lg"
                 />
@@ -374,14 +423,14 @@ export default function RiskDashboard({ patientData }) {
     );
   };
 
-  // Safety Alert Card
+  // Safety Alert Card — only shown if backend includes a `safety` block or side-effect flags
   const SafetyCard = () => {
-    const safety = result?.safety || {};
-    const hasViolations = safety.safety_flag || false;
-    const rules = safety.rules_triggered || [];
-    const score = safety.violation_score || 0;
+    const seFlag  = result?.sideeffect_risk?.high_risk_flag ?? false;
+    const thyFlag = result?.secondary_disease_risk?.thyroid_flag ?? false;
+    const autFlag = result?.secondary_disease_risk?.autoimmune_flag ?? false;
+    const hasAnyFlag = seFlag || thyFlag || autFlag;
 
-    if (!hasViolations) {
+    if (!hasAnyFlag) {
       return (
         <Card className={`transform transition-all duration-700 delay-500 border-2 border-green-500 ${animateCards ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
           <div className="flex items-center gap-4">
@@ -393,7 +442,7 @@ export default function RiskDashboard({ patientData }) {
                 All Safety Checks Passed
               </h3>
               <p className="text-gray-600 dark:text-gray-400">
-                No safety rule violations detected
+                No clinical flags detected
               </p>
             </div>
           </div>
@@ -408,42 +457,18 @@ export default function RiskDashboard({ patientData }) {
             <HiShieldExclamation className="text-4xl text-white" />
           </div>
           <div>
-            <h3 className="text-2xl font-bold text-red-600 dark:text-red-400">
-              Safety Alert Triggered
-            </h3>
-            <p className="text-gray-700 dark:text-gray-300">
-              {rules.length} safety rule violation{rules.length !== 1 ? 's' : ''} detected
-            </p>
+            <h3 className="text-2xl font-bold text-red-600 dark:text-red-400">Clinical Flags Detected</h3>
+            <p className="text-gray-700 dark:text-gray-300">Manual clinical review recommended</p>
           </div>
         </div>
-
-        <Alert color="failure" icon={HiExclamation} className="mb-4">
-          <span className="font-bold">Violation Score: {score.toFixed(3)}</span>
-        </Alert>
-
         <div className="space-y-2">
-          <p className="font-semibold text-gray-900 dark:text-white mb-2">Triggered Rules:</p>
-          {rules.map((rule, idx) => (
-            <div 
-              key={idx}
-              className="flex items-start gap-2 p-3 bg-white dark:bg-gray-800 rounded-lg border border-red-300 dark:border-red-700"
-            >
-              <HiExclamation className="text-xl text-red-600 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="font-semibold text-red-700 dark:text-red-400">
-                  {rule.replace(/_/g, ' ')}
-                </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                  {getAlertDescription(rule)}
-                </p>
-              </div>
-            </div>
-          ))}
+          {seFlag  && <Alert color="failure" icon={HiExclamation}><span className="font-semibold">Side-Effect High Risk Flag</span> — Elevated treatment risk detected.</Alert>}
+          {thyFlag && <Alert color="warning" icon={HiInformationCircle}><span className="font-semibold">Thyroid Risk Flag</span> — Thyroid disease risk exceeds threshold.</Alert>}
+          {autFlag && <Alert color="warning" icon={HiInformationCircle}><span className="font-semibold">Autoimmune Risk Flag</span> — Autoimmune disease risk exceeds threshold.</Alert>}
         </div>
-
         <Alert color="warning" icon={HiInformationCircle} className="mt-4">
           <span className="font-semibold">Clinical Recommendation: </span>
-          Manual review required. Consider additional diagnostic tests and specialist consultation.
+          Consider additional diagnostic tests and specialist consultation.
         </Alert>
       </Card>
     );
@@ -451,7 +476,8 @@ export default function RiskDashboard({ patientData }) {
 
   // Fusion Gates Card (Model Insights)
   const FusionGatesCard = () => {
-    const gates = result?.fusion_gates_mean || {};
+    // backend returns modality_gates: {gate_type: 0.x, gate_sideeffect: 0.x, ...}
+    const gates = result?.modality_gates || result?.fusion_gates_mean || {};
     const entries = Object.entries(gates);
 
     return (
@@ -556,10 +582,10 @@ export default function RiskDashboard({ patientData }) {
 
   return (
     <div className="space-y-6">
-      {/* Decision Status - Full Width */}
-      <DecisionCard />
+      {/* Summary / Composite Risk — Full Width */}
+      <SummaryCard />
 
-      {/* Safety Alert - Full Width if triggered */}
+      {/* Safety / Flag Alert — Full Width */}
       <SafetyCard />
 
       {/* Main Risk Metrics - 2 Column Grid */}
@@ -579,8 +605,8 @@ export default function RiskDashboard({ patientData }) {
 
       {/* Disclaimer */}
       <Alert color="info" icon={HiInformationCircle}>
-        <span className="font-semibold">Disclaimer: </span>
-        {result.disclaimer}
+        <span className="font-semibold">Clinical Disclaimer: </span>
+        This AI-generated assessment is for clinical support only. Always interpret results with a qualified healthcare professional.
       </Alert>
     </div>
   );

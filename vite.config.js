@@ -19,6 +19,8 @@ export default defineConfig({
       '/report':  { target: 'http://localhost:8000', changeOrigin: true, bypass: apiBypass, rewrite: (path) => '/IT22577160' + path },
       '/health':  { target: 'http://localhost:8000', changeOrigin: true, bypass: apiBypass, rewrite: (path) => '/IT22577160' + path },
       '/extract': { target: 'http://localhost:8000', changeOrigin: true, bypass: apiBypass, rewrite: (path) => '/IT22577160' + path },
+      '/predict':      { target: 'http://localhost:8000', changeOrigin: true, bypass: apiBypass, rewrite: (path) => '/IT22607232' + path },
+      '/predict-ocr':  { target: 'http://localhost:8000', changeOrigin: true, bypass: apiBypass, rewrite: (path) => '/IT22607232' + path },
     }
   },
   plugins: [react()],

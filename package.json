@@ -21,7 +21,7 @@
     "react-router-dom": "^6.30.0",
     "react-simple-typewriter": "^5.0.1",
     "react-toastify": "^11.0.5",
-    "recharts": "^3.5.1",
+    "recharts": "^2.13.3",
     "redux-persist": "^6.0.0",
     "swiper": "^11.1.4"
   },
