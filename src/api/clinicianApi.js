@@ -38,12 +38,13 @@ export function getDiseaseType() {
 export async function getDashboard(
   caseId,
   diseaseType = DEFAULT_DISEASE_TYPE,
-  includeExplainability = false
+  includeExplainability = false,
+  includeLlm = true
 ) {
   const encodedCaseId = encodeURIComponent(caseId);
   const encodedDisease = encodeURIComponent(diseaseType);
   return request(
-    `/api/v1/dashboard/${encodedCaseId}?diseaseType=${encodedDisease}&includeExplainability=${includeExplainability}`
+    `/api/v1/dashboard/${encodedCaseId}?diseaseType=${encodedDisease}&includeExplainability=${includeExplainability}&includeLlm=${includeLlm}`
   );
 }
 
