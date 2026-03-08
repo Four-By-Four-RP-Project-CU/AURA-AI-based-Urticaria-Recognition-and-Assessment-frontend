@@ -13,70 +13,11 @@ import StatusPill from "../components/models/StatusPill"
 import FeatureColumnsAccordion from "../components/models/FeatureColumnsAccordion"
 import ModelDetailsDrawer from "../components/models/ModelDetailsDrawer"
 import {
+  getCurrentDeployedModelInsights,
   getModelRegistryById,
+  listModelRegistry,
   type ModelInfo,
 } from "../services/modelsApi"
-
-const mockCurrentModel: ModelInfo = {
-  modelVersion: "v1.0.3",
-  status: "DEPLOYED",
-  trainedAt: "2025-12-29T18:12:34.857Z",
-  trainedOnCases: 1240,
-  featureColumns: [
-    "patient_age",
-    "gender_male",
-    "uct_total_score",
-    "aect_total_score",
-    "confidence_predicted_drug_step",
-    "risk_count",
-    "risk_max",
-    "risk_avg",
-  ],
-  metrics: {
-    accuracy: 0.5,
-    macro_f1: 0.3333333333333333,
-    step_accuracy: 0.5,
-  },
-}
-
-const mockModels: ModelInfo[] = [
-  {
-    modelVersion: "v1.0.4",
-    status: "READY",
-    trainedAt: "2026-01-06T10:22:11.000Z",
-    trainedOnCases: 1290,
-    featureColumns: mockCurrentModel.featureColumns,
-    metrics: {
-      accuracy: 0.56,
-      macro_f1: 0.41,
-      step_accuracy: 0.54,
-    },
-  },
-  {
-    modelVersion: "v1.0.3",
-    status: "DEPLOYED",
-    trainedAt: "2025-12-29T18:12:34.857Z",
-    trainedOnCases: 1240,
-    featureColumns: mockCurrentModel.featureColumns,
-    metrics: {
-      accuracy: 0.5,
-      macro_f1: 0.3333333333333333,
-      step_accuracy: 0.5,
-    },
-  },
-  {
-    modelVersion: "v1.0.2",
-    status: "ARCHIVED",
-    trainedAt: "2025-12-10T09:05:00.000Z",
-    trainedOnCases: 1180,
-    featureColumns: mockCurrentModel.featureColumns,
-    metrics: {
-      accuracy: 0.48,
-      macro_f1: 0.31,
-      step_accuracy: 0.47,
-    },
-  },
-]
 
 const formatDateTime = (value?: string) => {
   if (!value) return "Not available"
@@ -96,10 +37,8 @@ const toPercent = (value?: number) => {
 }
 
 const ModelRegistryPage = () => {
-  const [currentModel, setCurrentModel] = useState<ModelInfo | null>(
-    mockCurrentModel
-  )
-  const [models, setModels] = useState<ModelInfo[]>(mockModels)
+  const [currentModel, setCurrentModel] = useState<ModelInfo | null>(null)
+  const [models, setModels] = useState<ModelInfo[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -112,8 +51,37 @@ const ModelRegistryPage = () => {
   }, [currentModel, models])
 
   const loadModels = async () => {
-    setCurrentModel(mockCurrentModel)
-    setModels(mockModels)
+    const [currentModelResult, recordsResult] = await Promise.allSettled([
+      getCurrentDeployedModelInsights(),
+      listModelRegistry(),
+    ])
+
+    const records =
+      recordsResult.status === "fulfilled" ? recordsResult.value : []
+    const ordered = [...records].sort((a, b) => {
+      const aTime = new Date(a.trainedAt || 0).getTime()
+      const bTime = new Date(b.trainedAt || 0).getTime()
+      return bTime - aTime
+    })
+
+    const deployedModel =
+      ordered.find((model) => model.promoted) ||
+      ordered.find((model) => model.status === "DEPLOYED") ||
+      ordered[0] ||
+      null
+
+    const nextCurrentModel =
+      currentModelResult.status === "fulfilled"
+        ? currentModelResult.value
+        : deployedModel || null
+    const nextModels = ordered
+
+    setCurrentModel(nextCurrentModel)
+    setModels(nextModels)
+
+    if (currentModelResult.status === "rejected" && recordsResult.status === "rejected") {
+      throw currentModelResult.reason || recordsResult.reason
+    }
   }
 
   const handleRefresh = async () => {
@@ -124,8 +92,8 @@ const ModelRegistryPage = () => {
     } catch (fetchError) {
       const message = fetchError instanceof Error ? fetchError.message : "Failed to load models"
       setError(message)
-      setCurrentModel(mockCurrentModel)
-      setModels(mockModels)
+      setCurrentModel(null)
+      setModels([])
     } finally {
       setRefreshing(false)
     }
@@ -140,8 +108,8 @@ const ModelRegistryPage = () => {
       } catch (fetchError) {
         const message = fetchError instanceof Error ? fetchError.message : "Failed to load models"
         setError(message)
-        setCurrentModel(mockCurrentModel)
-        setModels(mockModels)
+        setCurrentModel(null)
+        setModels([])
       } finally {
         setLoading(false)
       }
@@ -225,14 +193,18 @@ const ModelRegistryPage = () => {
                     Current Deployed Model
                   </p>
                   <h2 className="text-xl font-semibold text-slate-900">
-                    {currentModel?.modelVersion || "Not available"}
+                    {currentModel?.modelVersion || "No current model deployed yet"}
                   </h2>
-                  <p className="mt-1 text-sm text-slate-600">
-                    Trained at {formatDateTime(currentModel?.trainedAt)}
-                  </p>
-                  <p className="text-sm text-slate-600">
-                    Trained on {currentModel?.trainedOnCases ?? "Not available"} cases
-                  </p>
+                  {currentModel ? (
+                    <>
+                      <p className="mt-1 text-sm text-slate-600">
+                        Trained at {formatDateTime(currentModel.trainedAt)}
+                      </p>
+                      <p className="text-sm text-slate-600">
+                        Trained on {currentModel.trainedOnCases ?? "Not available"} cases
+                      </p>
+                    </>
+                  ) : null}
                 </div>
                 {currentModel && <StatusPill status={currentModel.status} />}
             </div>

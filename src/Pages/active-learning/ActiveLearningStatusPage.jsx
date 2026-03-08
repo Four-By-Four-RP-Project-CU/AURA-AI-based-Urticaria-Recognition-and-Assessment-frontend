@@ -1,115 +1,179 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Badge, Button, Progress, Spinner } from "flowbite-react";
 import { FaBars, FaTimes } from "react-icons/fa";
-import { mockActiveLearningCases } from "../../data/mockActiveLearningCases";
 import ActiveLearningSidebar from "../../components/active-learning/ActiveLearningSidebar";
 import DashboardShell from "../../components/active-learning/DashboardShell";
 import PageHeader from "../../components/active-learning/PageHeader";
 import StatCard from "../../components/active-learning/StatCard";
-import { bumpModelVersion } from "../../utils/activeLearningUtils";
-import { triggerRetrain } from "../../services/modelsApi";
+import {
+  getDashboardInsights,
+  getRedeploymentStatusInsights,
+  triggerRetrain,
+} from "../../services/modelsApi";
 
-const FEEDBACK_KEY = "activeLearningFeedback";
-const OVERRIDES_KEY = "activeLearningCaseOverrides";
-const DATASET_MIN_RECORDS = 2;
-const DATASET_MAX_RECORDS = 80;
+const DEFAULT_INSIGHTS = {
+  retrainingCoverage: {
+    retrainedCases: 0,
+    targetCases: 0,
+    progressPercent: 0,
+    eligibleReviewedCases: 0,
+    currentModelVersion: "—",
+    confidenceTargetPercent: 0,
+    lastUpdatedAt: "",
+  },
+  datasetReadiness: {
+    reviewedCases: 0,
+    totalCases: 0,
+    coverageRatePercent: 0,
+    correctionsLogged: 0,
+    acceptedPredictions: 0,
+    targetRangeStart: 0,
+    targetRangeEnd: 0,
+    minimumMet: false,
+    lastUpdatedAt: "",
+  },
+  recentActivity: {
+    reviewedThisCycle: 0,
+    acceptedCount: 0,
+    correctedCount: 0,
+    rejectedCount: 0,
+    lastUpdatedAt: "",
+  },
+  labelCoverage: {
+    reviewedCases: 0,
+    targetReviewedCases: 0,
+    acceptedCount: 0,
+    correctedCount: 0,
+    rejectedCount: 0,
+    readyForRetraining: false,
+    lastUpdatedAt: "",
+  },
+};
+
+const DEFAULT_REDEPLOYMENT = {
+  currentModelVersion: "—",
+  isLive: false,
+  eligibleReviewedCases: 0,
+  confidenceTargetPercent: 0,
+  updatedModelDeployed: false,
+  activeLearningEnabled: false,
+  redeploymentStatusMessage: "No redeployment status available.",
+  lastUpdatedAt: "",
+};
+
+const formatLastUpdated = (timestamp) => {
+  if (!timestamp) return "No updates yet";
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return "No updates yet";
+  return date.toLocaleString();
+};
 
 const ActiveLearningStatusPage = () => {
-  const [feedbackEntries, setFeedbackEntries] = useState([]);
-  const [caseOverrides, setCaseOverrides] = useState({});
   const [showSidebar, setShowSidebar] = useState(true);
+  const [isLoadingInsights, setIsLoadingInsights] = useState(false);
+  const [insightsError, setInsightsError] = useState("");
+  const [insights, setInsights] = useState(null);
+  const [redeployment, setRedeployment] = useState(null);
   const [isRetraining, setIsRetraining] = useState(false);
-  const [retrainSimulationProgress, setRetrainSimulationProgress] = useState(0);
   const [retrainMessage, setRetrainMessage] = useState("");
   const [retrainError, setRetrainError] = useState("");
-  const [currentModel, setCurrentModel] = useState(null);
 
-  useEffect(() => {
-    try {
-      const stored = JSON.parse(
-        window.localStorage.getItem(FEEDBACK_KEY) || "[]"
-      );
-      setFeedbackEntries(Array.isArray(stored) ? stored : []);
-    } catch (error) {
-      setFeedbackEntries([]);
-    }
+  const loadInsights = useCallback(async (signal) => {
+    setIsLoadingInsights(true);
+    setInsightsError("");
 
     try {
-      const overrides = JSON.parse(
-        window.localStorage.getItem(OVERRIDES_KEY) || "{}"
-      );
-      setCaseOverrides(
-        overrides && typeof overrides === "object" ? overrides : {}
-      );
+      const [insightsResponse, redeploymentResponse] = await Promise.allSettled([
+        getDashboardInsights(signal),
+        getRedeploymentStatusInsights(signal),
+      ]);
+
+      if (insightsResponse.status === "fulfilled") {
+        setInsights(insightsResponse.value);
+      } else {
+        setInsights(null);
+      }
+
+      if (redeploymentResponse.status === "fulfilled") {
+        setRedeployment(redeploymentResponse.value);
+      } else {
+        setRedeployment(null);
+      }
+
+      if (
+        insightsResponse.status === "rejected" &&
+        redeploymentResponse.status === "rejected"
+      ) {
+        throw insightsResponse.reason || redeploymentResponse.reason;
+      }
     } catch (error) {
-      setCaseOverrides({});
+      if (error?.name !== "AbortError") {
+        setInsightsError(error?.message || "Failed to load dashboard insights.");
+        setInsights(null);
+        setRedeployment(null);
+      }
+    } finally {
+      setIsLoadingInsights(false);
     }
   }, []);
 
   useEffect(() => {
-    setCurrentModel({
-      modelVersion: "v1.3.2",
-      status: "DEPLOYED",
-      metrics: {
-        accuracy: 95.6,
-        macro_f1: 93.4,
-      },
-    });
-  }, []);
+    const controller = new AbortController();
+    loadInsights(controller.signal);
+    return () => controller.abort();
+  }, [loadInsights]);
 
-  const mergedCases = useMemo(
-    () =>
-      mockActiveLearningCases.map((item) => ({
-        ...item,
-        ...caseOverrides[item.caseId],
-      })),
-    [caseOverrides]
-  );
-  const reviewedCaseIds = useMemo(
-    () => new Set(feedbackEntries.map((entry) => entry.caseId)),
-    [feedbackEntries]
+  const data = insights || DEFAULT_INSIGHTS;
+  const retrainingCoverage = data.retrainingCoverage;
+  const datasetReadiness = data.datasetReadiness;
+  const recentActivity = data.recentActivity;
+  const labelCoverage = data.labelCoverage;
+  const redeploymentStatus = redeployment || {
+    ...DEFAULT_REDEPLOYMENT,
+    currentModelVersion: retrainingCoverage.currentModelVersion || "—",
+    eligibleReviewedCases: retrainingCoverage.eligibleReviewedCases || 0,
+    confidenceTargetPercent: retrainingCoverage.confidenceTargetPercent || 0,
+    isLive: true,
+    activeLearningEnabled: true,
+    updatedModelDeployed: true,
+    redeploymentStatusMessage:
+      "Redeployment status: Live and monitoring uncertain cases.",
+    lastUpdatedAt: retrainingCoverage.lastUpdatedAt || "",
+  };
+
+  const reviewedCount = labelCoverage.reviewedCases;
+  const acceptedCount = labelCoverage.acceptedCount;
+  const correctedCount = labelCoverage.correctedCount;
+  const rejectedCount = labelCoverage.rejectedCount;
+  const datasetTarget = labelCoverage.targetReviewedCases || datasetReadiness.totalCases;
+  const coverageRate = Math.max(
+    0,
+    Math.min(100, Math.round(datasetReadiness.coverageRatePercent || 0))
   );
 
-  const reviewedCount = feedbackEntries.length;
-  const correctedCount = feedbackEntries.filter(
-    (entry) => entry.clinicianAction === "Corrected"
-  ).length;
-  const acceptedCount = feedbackEntries.filter(
-    (entry) => entry.clinicianAction === "Accepted"
-  ).length;
-  const rejectedCount = feedbackEntries.filter(
-    (entry) => entry.clinicianAction === "Rejected"
-  ).length;
-
-  const datasetTarget = Math.min(
-    Math.max(mockActiveLearningCases.length, DATASET_MIN_RECORDS),
-    DATASET_MAX_RECORDS
-  );
-  const coverageRate = Math.min(
-    Math.round((reviewedCount / datasetTarget) * 100),
-    100
-  );
   const readinessStatus =
-    reviewedCount >= DATASET_MAX_RECORDS
+    datasetReadiness.targetRangeEnd > 0 &&
+    reviewedCount >= datasetReadiness.targetRangeEnd
       ? {
           label: "Dataset full",
           description: "Full dataset reached. Ready for final retraining.",
           className: "border-emerald-200 bg-emerald-50 text-emerald-800",
           progressColor: "success",
         }
-      : reviewedCount >= DATASET_MIN_RECORDS
+      : datasetReadiness.minimumMet
         ? {
             label: "Minimum met",
-            description: "Minimum 50 reviews met. Ready for retraining.",
+            description: `Minimum ${datasetReadiness.targetRangeStart} reviews met. Ready for retraining.`,
             className: "border-amber-200 bg-amber-50 text-amber-800",
             progressColor: "warning",
           }
         : {
             label: "Needs more reviews",
-            description: `Collect at least ${DATASET_MIN_RECORDS} reviewed cases.`,
+            description: `Collect at least ${datasetReadiness.targetRangeStart} reviewed cases.`,
             className: "border-rose-200 bg-rose-50 text-rose-800",
             progressColor: "failure",
           };
+
   const readinessCardClass =
     coverageRate >= 80
       ? "border-emerald-200 bg-emerald-50"
@@ -117,102 +181,62 @@ const ActiveLearningStatusPage = () => {
         ? "border-sky-200 bg-sky-50"
         : "border-rose-200 bg-rose-50";
 
-  const retrainedCases = mergedCases.filter(
-    (item) => item.status === "RETRAINED"
+  const retrainCount = retrainingCoverage.retrainedCases;
+  const retrainTarget = retrainingCoverage.targetCases;
+  const retrainProgress = Math.max(
+    0,
+    Math.min(100, Math.round(retrainingCoverage.progressPercent || 0))
   );
-  const retrainCount = retrainedCases.length;
-  const latestModelVersion = retrainCount
-    ? retrainedCases[0].modelVersion
-    : mockActiveLearningCases[0].modelVersion;
-  const latestConfidence = retrainCount
-    ? retrainedCases[0].confidence
-    : mockActiveLearningCases[0].confidence;
-  const modelAccuracy = Math.min(99, Math.round((latestConfidence + 30) * 10) / 10);
-  const modelMacroF1 = Math.min(99, Math.round((latestConfidence + 24) * 10) / 10);
-  const currentModelVersion = currentModel?.modelVersion || latestModelVersion;
-  const currentModelAccuracy =
-    typeof currentModel?.metrics?.accuracy === "number"
-      ? currentModel.metrics.accuracy
-      : modelAccuracy;
-  const currentModelMacroF1 =
-    typeof currentModel?.metrics?.macro_f1 === "number"
-      ? currentModel.metrics.macro_f1
-      : modelMacroF1;
-  const retrainProgress = Math.min(
-    Math.round((retrainCount / mockActiveLearningCases.length) * 100),
-    100
+  const canRetrain =
+    labelCoverage.readyForRetraining || datasetReadiness.minimumMet;
+
+  const deploymentStatus = redeploymentStatus.isLive
+    ? {
+        label: "Live",
+        dotClass: "bg-emerald-500",
+        textClass: "text-emerald-700",
+      }
+    : {
+        label: "Not Live",
+        dotClass: "bg-rose-500",
+        textClass: "text-rose-700",
+      };
+
+  const lastUpdated = useMemo(
+    () =>
+      formatLastUpdated(
+        labelCoverage.lastUpdatedAt ||
+          recentActivity.lastUpdatedAt ||
+          datasetReadiness.lastUpdatedAt ||
+          retrainingCoverage.lastUpdatedAt
+      ),
+    [
+      labelCoverage.lastUpdatedAt,
+      recentActivity.lastUpdatedAt,
+      datasetReadiness.lastUpdatedAt,
+      retrainingCoverage.lastUpdatedAt,
+    ]
   );
-  const canRetrain = reviewedCount >= DATASET_MIN_RECORDS;
-  const deploymentStatus = {
-    label: "Live",
-    dotClass: "bg-emerald-500",
-    textClass: "text-emerald-700",
-  };
 
-  const lastUpdated = useMemo(() => {
-    if (feedbackEntries.length === 0) return "No updates yet";
-    const latest = feedbackEntries[0];
-    return new Date(latest.timestamp).toLocaleString();
-  }, [feedbackEntries]);
-
-  const handleRetrainComplete = (nextVersion, nextConfidence) => {
-    if (reviewedCaseIds.size === 0) return;
-    try {
-      const overrides = JSON.parse(
-        window.localStorage.getItem(OVERRIDES_KEY) || "{}"
-      );
-      const next = { ...overrides };
-      reviewedCaseIds.forEach((caseId) => {
-        next[caseId] = {
-          ...(next[caseId] || {}),
-          modelVersion: nextVersion,
-          confidence: nextConfidence,
-          status: "RETRAINED",
-        };
-      });
-      window.localStorage.setItem(OVERRIDES_KEY, JSON.stringify(next));
-      setCaseOverrides(next);
-    } catch (error) {
-      setCaseOverrides((prev) => prev);
-    }
-  };
-
-  const handleRetrain = () => {
+  const handleRetrain = async () => {
     if (!canRetrain || isRetraining) return;
     setIsRetraining(true);
     setRetrainError("");
     setRetrainMessage("");
 
-    const startRetrain = async () => {
-      try {
-        const response = await triggerRetrain();
-        setRetrainMessage(
-          `Retraining started for ${response.candidateModelVersion}`
-        );
-        setRetrainSimulationProgress(10);
-
-        let value = 10;
-        const timer = setInterval(() => {
-          value += 15;
-          setRetrainSimulationProgress(Math.min(value, 100));
-
-          if (value >= 100) {
-            clearInterval(timer);
-            const nextVersion = bumpModelVersion(latestModelVersion);
-            const nextConfidence = Math.min(latestConfidence + 4, 99);
-            setIsRetraining(false);
-            handleRetrainComplete(nextVersion, nextConfidence);
-          }
-        }, 320);
-      } catch (error) {
-        setIsRetraining(false);
-        setRetrainError(
-          error instanceof Error ? error.message : "Failed to start retraining."
-        );
-      }
-    };
-
-    startRetrain();
+    try {
+      const response = await triggerRetrain();
+      setRetrainMessage(
+        `Retraining started for ${response.candidateModelVersion}`
+      );
+      await loadInsights();
+    } catch (error) {
+      setRetrainError(
+        error instanceof Error ? error.message : "Failed to start retraining."
+      );
+    } finally {
+      setIsRetraining(false);
+    }
   };
 
   const header = (
@@ -239,6 +263,18 @@ const ActiveLearningStatusPage = () => {
       sidebar={showSidebar ? <ActiveLearningSidebar /> : null}
     >
       <div className="space-y-6">
+        {insightsError && (
+          <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            {insightsError}
+          </div>
+        )}
+        {isLoadingInsights && (
+          <div className="flex items-center gap-2 text-sm text-slate-600">
+            <Spinner size="sm" />
+            Loading status overview...
+          </div>
+        )}
+
         <div className="grid items-stretch gap-6 md:grid-cols-2 lg:grid-cols-3">
           <StatCard label="Updated Dataset Indicator" title="Clinician Label Coverage">
             <div className="mt-4 grid gap-3">
@@ -276,8 +312,8 @@ const ActiveLearningStatusPage = () => {
               <div
                 className={`rounded-lg border p-3 text-xs ${readinessStatus.className}`}
               >
-                {readinessStatus.label}. Target range {DATASET_MIN_RECORDS}-
-                {DATASET_MAX_RECORDS} reviewed cases.
+                {readinessStatus.label}. Target range {datasetReadiness.targetRangeStart}-
+                {datasetReadiness.targetRangeEnd} reviewed cases.
               </div>
               <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
                 <span>Coverage Rate</span>
@@ -288,13 +324,13 @@ const ActiveLearningStatusPage = () => {
               <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
                 <span>Corrections Logged</span>
                 <span className="font-semibold text-slate-900">
-                  {correctedCount}
+                  {datasetReadiness.correctionsLogged}
                 </span>
               </div>
               <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
                 <span>Accepted Predictions</span>
                 <span className="font-semibold text-slate-900">
-                  {acceptedCount}
+                  {datasetReadiness.acceptedPredictions}
                 </span>
               </div>
               <div className="rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-500">
@@ -312,31 +348,42 @@ const ActiveLearningStatusPage = () => {
                     className={`h-2.5 w-2.5 animate-pulse rounded-full ${deploymentStatus.dotClass}`}
                     aria-hidden="true"
                   />
-                  <span>{currentModelVersion}</span>
+                  <span>{redeploymentStatus.currentModelVersion || "—"}</span>
                   <span className={`text-xs font-medium ${deploymentStatus.textClass}`}>
                     {deploymentStatus.label}
                   </span>
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span>Accuracy level</span>
+                <span>Eligible reviewed cases</span>
                 <span className="font-semibold text-slate-900">
-                  {currentModelAccuracy}%
+                  {redeploymentStatus.eligibleReviewedCases}
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span>Macro F1 score</span>
+                <span>Confidence target</span>
                 <span className="font-semibold text-slate-900">
-                  {currentModelMacroF1}%
+                  {redeploymentStatus.confidenceTargetPercent}%
                 </span>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Badge color="success">Updated model deployed</Badge>
-                <Badge color="info">Active Learning Enabled</Badge>
+                <Badge color={redeploymentStatus.updatedModelDeployed ? "success" : "gray"}>
+                  {redeploymentStatus.updatedModelDeployed
+                    ? "Updated model deployed"
+                    : "Updated model pending"}
+                </Badge>
+                <Badge color={redeploymentStatus.activeLearningEnabled ? "info" : "gray"}>
+                  {redeploymentStatus.activeLearningEnabled
+                    ? "Active Learning Enabled"
+                    : "Active Learning Disabled"}
+                </Badge>
               </div>
               <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-                Redeployment status: Live and monitoring uncertain cases.
+                {redeploymentStatus.redeploymentStatusMessage}
               </div>
+              <p className="text-xs text-slate-500">
+                Last update: {formatLastUpdated(redeploymentStatus.lastUpdatedAt)}
+              </p>
             </div>
           </StatCard>
         </div>
@@ -348,20 +395,19 @@ const ActiveLearningStatusPage = () => {
                 <div className="flex items-center justify-between text-sm text-slate-600">
                   <span>Cases retrained</span>
                   <span className="font-semibold text-slate-900">
-                    {retrainCount} / {mockActiveLearningCases.length}
+                    {retrainCount} / {retrainTarget}
                   </span>
                 </div>
                 <Progress progress={retrainProgress} color="info" size="sm" />
                 <p className="text-xs text-slate-500">
-                  Retraining progress is simulated based on cases marked RETRAINED in
-                  the review workflow.
+                  Progress is read from dashboard insights retraining coverage.
                 </p>
               </div>
 
               <div className="border-t border-slate-200 pt-4">
-                <p className="text-sm text-slate-500">Retraining Simulation</p>
+                <p className="text-sm text-slate-500">Retraining</p>
                 <p className="mt-1 text-sm text-slate-600">
-                  Uses reviewed cases to mock a new model build.
+                  Start model retraining from reviewed cases.
                 </p>
                 <div className="mt-3 flex flex-wrap items-center gap-3">
                   <Button
@@ -373,13 +419,13 @@ const ActiveLearningStatusPage = () => {
                   </Button>
                   {!canRetrain && (
                     <Badge color="warning">
-                      Needs {DATASET_MIN_RECORDS}+ reviews
+                      Needs {datasetReadiness.targetRangeStart}+ reviews
                     </Badge>
                   )}
                   {isRetraining && (
                     <div className="flex items-center gap-2 text-sm text-slate-600">
                       <Spinner size="sm" />
-                      Updating weights
+                      Submitting retrain request
                     </div>
                   )}
                 </div>
@@ -392,14 +438,10 @@ const ActiveLearningStatusPage = () => {
                   <p className="mt-2 text-xs text-rose-600">{retrainError}</p>
                 )}
                 <div className="mt-4">
-                  <Progress
-                    progress={retrainSimulationProgress}
-                    color="info"
-                    size="sm"
-                  />
+                  <Progress progress={retrainProgress} color="info" size="sm" />
                   <p className="mt-2 text-xs text-slate-500">
-                    Current model {currentModelVersion} • Confidence target{" "}
-                    {latestConfidence}%
+                    Current model {retrainingCoverage.currentModelVersion || "—"} • Confidence target{" "}
+                    {retrainingCoverage.confidenceTargetPercent}%
                   </p>
                 </div>
               </div>
@@ -411,22 +453,24 @@ const ActiveLearningStatusPage = () => {
               <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
                 <span>Reviewed this cycle</span>
                 <span className="font-semibold text-slate-900">
-                  {reviewedCount}
+                  {recentActivity.reviewedThisCycle}
                 </span>
               </div>
               <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
                 <span>Accepted vs corrected</span>
                 <span className="font-semibold text-slate-900">
-                  {acceptedCount} / {correctedCount}
+                  {recentActivity.acceptedCount} / {recentActivity.correctedCount}
                 </span>
               </div>
               <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
                 <span>Rejected predictions</span>
                 <span className="font-semibold text-slate-900">
-                  {rejectedCount}
+                  {recentActivity.rejectedCount}
                 </span>
               </div>
-              <p className="text-xs text-slate-500">Last update: {lastUpdated}</p>
+              <p className="text-xs text-slate-500">
+                Last update: {formatLastUpdated(recentActivity.lastUpdatedAt)}
+              </p>
             </div>
           </StatCard>
         </div>

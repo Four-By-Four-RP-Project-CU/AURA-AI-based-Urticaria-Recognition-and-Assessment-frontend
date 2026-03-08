@@ -27,6 +27,7 @@ import ReviewCaseDetailPage from "./Pages/active-learning/ReviewCaseDetailPage";
 import ActiveLearningStatusPage from "./Pages/active-learning/ActiveLearningStatusPage";
 import ModelRegistryPage from "./Pages/ModelRegistryPage"
 import AdminReviewQueuePage from "./Pages/ReviewQueuePage"
+import DeveloperIntegrationGuide from "./Pages/DeveloperIntegrationGuide";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
@@ -55,6 +56,10 @@ const App = () => {
             />
             <Route path="/admin/models" element={<ModelRegistryPage />} />
             <Route path="/admin/review-queue" element={<AdminReviewQueuePage />} />
+            <Route
+              path="/developer-integration-guide"
+              element={<DeveloperIntegrationGuide />}
+            />
             {/* <Route path="/profile" element={<DashboardLayout><ProfilePage /></DashboardLayout>} /> */}
             {/* <Route path="/dashboard" element={<DashboardLayout><DashboardPage /></DashboardLayout>} />
             <Route path="/patient-profile" element={<DashboardLayout><PatientProfilePage /></DashboardLayout>} />
