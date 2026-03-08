@@ -72,8 +72,8 @@ const App = () => {
               path="/clinician-dashboard/:patientId"
               element={<ClinicianPatientDetail />}
             />
-            {/* <Route path="/profile" element={<DashboardLayout><ProfilePage /></DashboardLayout>} /> */}
-            {/* <Route path="/dashboard" element={<DashboardLayout><DashboardPage /></DashboardLayout>} />
+            <Route path="/profile" element={<DashboardLayout><ProfilePage /></DashboardLayout>} />
+            <Route path="/dashboard" element={<DashboardLayout><DashboardPage /></DashboardLayout>} />
             <Route path="/patient-profile" element={<DashboardLayout><PatientProfilePage /></DashboardLayout>} />
             <Route path="/lab-entry" element={<DashboardLayout><LabEntryPage /></DashboardLayout>} />
             <Route path="/patient-images" element={<DashboardLayout><PatientImageUploadPage /></DashboardLayout>} />

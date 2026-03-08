@@ -94,11 +94,11 @@ const Header = () => {
               </span>
             </Dropdown.Header>
             
-            {user && user.email && user.email.toLowerCase() === "ramindunimesh2000@gmail.com" && (
+            {/* {user && user.email && user.email.toLowerCase() === "ramindunimesh2000@gmail.com" && ( */}
               <Link to="/dashboard">
                 <Dropdown.Item>Dashboard</Dropdown.Item>
               </Link>
-            )}
+            {/* )} */}
             <Link to="/profile">
               <Dropdown.Item>Profile</Dropdown.Item>
             </Link>
