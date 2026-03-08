@@ -590,16 +590,16 @@ export default function ClinicianPatientDetail() {
         <div className="grid gap-6 lg:grid-cols-3 animate-fade-in-delay-3">
           <Card className={`lg:col-span-3 ${cardClass}`}>
             <SectionHeader
-              title="LLM Explanation"
-              subtitle="Clinician-readable summary generated from the structured explainability evidence."
+              title="Clinical Interpretation Summary"
+              subtitle="Clinician-readable summary generated from structured explainability evidence."
             />
             {isLoading ? (
               <p className="mt-6 text-sm text-slate-500">
-                Loading LLM explanation...
+                Loading clinical interpretation summary...
               </p>
             ) : !llmExplainability ? (
               <p className="mt-6 text-sm text-slate-500">
-                LLM explanation unavailable. Structured SHAP and Grad-CAM evidence remains visible.
+                Clinical interpretation summary unavailable. Structured SHAP and Grad-CAM evidence remains visible.
               </p>
             ) : (
               <div className="mt-6 grid gap-5">
