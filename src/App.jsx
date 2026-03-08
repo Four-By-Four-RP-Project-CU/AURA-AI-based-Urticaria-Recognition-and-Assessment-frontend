@@ -60,8 +60,8 @@ const App = () => {
               path="/developer-integration-guide"
               element={<DeveloperIntegrationGuide />}
             />
-            {/* <Route path="/profile" element={<DashboardLayout><ProfilePage /></DashboardLayout>} /> */}
-            {/* <Route path="/dashboard" element={<DashboardLayout><DashboardPage /></DashboardLayout>} />
+             <Route path="/profile" element={<DashboardLayout><ProfilePage /></DashboardLayout>} />
+            <Route path="/dashboard" element={<DashboardLayout><DashboardPage /></DashboardLayout>} />
             <Route path="/patient-profile" element={<DashboardLayout><PatientProfilePage /></DashboardLayout>} />
             <Route path="/lab-entry" element={<DashboardLayout><LabEntryPage /></DashboardLayout>} />
             <Route path="/patient-images" element={<DashboardLayout><PatientImageUploadPage /></DashboardLayout>} />
@@ -70,6 +70,7 @@ const App = () => {
             <Route path="/safety-alerts" element={<DashboardLayout><SafetyAlertPage /></DashboardLayout>} />
             <Route path="/analyze" element={<DashboardLayout><AnalyzePage /></DashboardLayout>} />
             <Route path="/analysis-records" element={<DashboardLayout><AnalysisRecordsPage /></DashboardLayout>} />
+
             {/* IT22607232 — Risk & Side-Effect Profiling */}
             <Route path="/risk-dashboard" element={<DashboardLayout><DashboardNew /></DashboardLayout>} />
             <Route path="/risk-assessment" element={<DashboardLayout><RiskAssessment /></DashboardLayout>} />
