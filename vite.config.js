@@ -15,10 +15,12 @@ const apiBypass = (req) => {
 export default defineConfig({
   server: {
     proxy: {
-      '/analyze': { target: 'http://localhost:8000', changeOrigin: true, bypass: apiBypass },
-      '/report':  { target: 'http://localhost:8000', changeOrigin: true, bypass: apiBypass },
-      '/health':  { target: 'http://localhost:8000', changeOrigin: true, bypass: apiBypass },
-      '/extract': { target: 'http://localhost:8000', changeOrigin: true, bypass: apiBypass },
+      '/analyze': { target: 'http://localhost:8000', changeOrigin: true, bypass: apiBypass, rewrite: (path) => '/IT22577160' + path },
+      '/report':  { target: 'http://localhost:8000', changeOrigin: true, bypass: apiBypass, rewrite: (path) => '/IT22577160' + path },
+      '/health':  { target: 'http://localhost:8000', changeOrigin: true, bypass: apiBypass, rewrite: (path) => '/IT22577160' + path },
+      '/extract': { target: 'http://localhost:8000', changeOrigin: true, bypass: apiBypass, rewrite: (path) => '/IT22577160' + path },
+      '/predict':      { target: 'http://localhost:8000', changeOrigin: true, bypass: apiBypass, rewrite: (path) => '/IT22607232' + path },
+      '/predict-ocr':  { target: 'http://localhost:8000', changeOrigin: true, bypass: apiBypass, rewrite: (path) => '/IT22607232' + path },
     }
   },
   plugins: [react()],
