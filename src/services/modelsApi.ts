@@ -1,3 +1,5 @@
+/// <reference types="vite/client" />
+
 export type ModelStatus = "DEPLOYED" | "READY" | "RETRAINING" | "FAILED" | "ARCHIVED"
 
 export type ModelMetrics = {
@@ -14,12 +16,82 @@ export type ModelInfo = {
   trainedOnCases?: number,
   featureColumns?: string[],
   metrics?: ModelMetrics,
+  promoted?: boolean,
 }
 
 export type RetrainResponse = {
   retrainJobId: string,
   candidateModelVersion: string,
   status: ModelStatus,
+}
+
+export type RetrainingCoverageInsight = {
+  retrainedCases: number,
+  targetCases: number,
+  progressPercent: number,
+  eligibleReviewedCases: number,
+  currentModelVersion: string,
+  confidenceTargetPercent: number,
+  lastUpdatedAt?: string,
+}
+
+export type DatasetReadinessInsight = {
+  reviewedCases: number,
+  totalCases: number,
+  coverageRatePercent: number,
+  correctionsLogged: number,
+  acceptedPredictions: number,
+  targetRangeStart: number,
+  targetRangeEnd: number,
+  minimumMet: boolean,
+  lastUpdatedAt?: string,
+}
+
+export type RecentActivityInsight = {
+  reviewedThisCycle: number,
+  acceptedCount: number,
+  correctedCount: number,
+  rejectedCount: number,
+  lastUpdatedAt?: string,
+}
+
+export type LabelCoverageInsight = {
+  reviewedCases: number,
+  targetReviewedCases: number,
+  acceptedCount: number,
+  correctedCount: number,
+  rejectedCount: number,
+  readyForRetraining: boolean,
+  lastUpdatedAt?: string,
+}
+
+export type DashboardInsights = {
+  retrainingCoverage: RetrainingCoverageInsight,
+  datasetReadiness: DatasetReadinessInsight,
+  recentActivity: RecentActivityInsight,
+  labelCoverage: LabelCoverageInsight,
+}
+
+export type RedeploymentStatusInsight = {
+  currentModelVersion: string,
+  isLive: boolean,
+  eligibleReviewedCases: number,
+  confidenceTargetPercent: number,
+  updatedModelDeployed: boolean,
+  activeLearningEnabled: boolean,
+  redeploymentStatusMessage: string,
+  lastUpdatedAt?: string,
+}
+
+export type CurrentDeployedModelInsight = {
+  modelVersion: string,
+  modelStatus: ModelStatus,
+  trainedAt?: string,
+  trainedCases?: number,
+  accuracyPercent?: number,
+  macroF1Percent?: number,
+  stepAccuracyPercent?: number,
+  featureColumns?: string[],
 }
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8081"
@@ -102,6 +174,15 @@ const normalizeStatus = (value?: string): ModelStatus => {
   return "READY"
 }
 
+const parseStatus = (value: unknown): ModelStatus | undefined => {
+  if (typeof value !== "string") return undefined
+  const normalized = value.toUpperCase()
+  if (["DEPLOYED", "READY", "RETRAINING", "FAILED", "ARCHIVED"].includes(normalized)) {
+    return normalized as ModelStatus
+  }
+  return undefined
+}
+
 const toNumber = (value: unknown) => {
   if (typeof value === "number") return value
   if (typeof value === "string" && value.trim() !== "") {
@@ -111,11 +192,17 @@ const toNumber = (value: unknown) => {
   return undefined
 }
 
+const toRatio = (value: unknown) => {
+  const numeric = toNumber(value)
+  if (numeric === undefined) return undefined
+  return numeric > 1 ? numeric / 100 : numeric
+}
+
 const mapModelMetrics = (source?: Record<string, unknown>): ModelMetrics | undefined => {
   if (!source) return undefined
-  const accuracy = toNumber(source.accuracy ?? source.acc)
-  const macro_f1 = toNumber(source.macro_f1 ?? source.macroF1)
-  const step_accuracy = toNumber(source.step_accuracy ?? source.stepAccuracy)
+  const accuracy = toRatio(source.accuracy ?? source.acc)
+  const macro_f1 = toRatio(source.macro_f1 ?? source.macroF1)
+  const step_accuracy = toRatio(source.step_accuracy ?? source.stepAccuracy)
   if (accuracy === undefined && macro_f1 === undefined && step_accuracy === undefined) {
     return undefined
   }
@@ -123,6 +210,35 @@ const mapModelMetrics = (source?: Record<string, unknown>): ModelMetrics | undef
     accuracy,
     macro_f1,
     step_accuracy,
+  }
+}
+
+const mapCurrentDeployedModel = (
+  payload: CurrentDeployedModelInsight | Record<string, unknown>
+): ModelInfo | null => {
+  const item = payload as Record<string, unknown>
+  const modelVersion =
+    typeof item.modelVersion === "string" ? item.modelVersion.trim() : ""
+  const status = parseStatus(item.modelStatus ?? item.status)
+
+  // Empty payload means there is currently no deployed model.
+  if (!modelVersion && !status) return null
+
+  return {
+    modelVersion: modelVersion || "Unknown",
+    status: status || "READY",
+    trainedAt: item.trainedAt as string,
+    trainedOnCases: toNumber(item.trainedCases),
+    featureColumns:
+      (item.featureColumns as string[]) ||
+      (item.feature_columns as string[]) ||
+      [],
+    metrics: {
+      accuracy: toRatio(item.accuracyPercent),
+      macro_f1: toRatio(item.macroF1Percent),
+      step_accuracy: toRatio(item.stepAccuracyPercent),
+    },
+    promoted: true,
   }
 }
 
@@ -144,6 +260,7 @@ const mapModelRegistryItem = (item: Record<string, unknown>): ModelInfo => {
       (item.createdAt as string),
     trainedOnCases:
       toNumber(item.trainedOnCases) ??
+      toNumber(item.trainedCases) ??
       toNumber(item.trained_on_cases) ??
       toNumber(item.trainingCases) ??
       toNumber(item.caseCount),
@@ -152,6 +269,7 @@ const mapModelRegistryItem = (item: Record<string, unknown>): ModelInfo => {
       (item.features as string[]) ||
       (item.feature_columns as string[]),
     metrics,
+    promoted: Boolean(item.promoted),
   }
 }
 
@@ -180,5 +298,84 @@ export const getModelRegistryById = async (id: string, signal?: AbortSignal) => 
     }
   )
   const payload = await handleResponse<Record<string, unknown>>(response)
-  return mapModelRegistryItem(payload)
+  const record =
+    (payload.record as Record<string, unknown>) ||
+    (payload.data as Record<string, unknown>) ||
+    payload
+  return mapModelRegistryItem(record)
+}
+
+export const getDashboardInsights = async (signal?: AbortSignal) => {
+  const response = await fetch(buildUrl("/api/v1/dashboard-review/insights"), {
+    headers: buildAuthHeaders(),
+    signal,
+  })
+  return handleResponse<DashboardInsights>(response)
+}
+
+export const getRetrainingCoverageInsights = async (signal?: AbortSignal) => {
+  const response = await fetch(
+    buildUrl("/api/v1/dashboard-review/insights/retraining-coverage"),
+    {
+      headers: buildAuthHeaders(),
+      signal,
+    }
+  )
+  return handleResponse<RetrainingCoverageInsight>(response)
+}
+
+export const getDatasetReadinessInsights = async (signal?: AbortSignal) => {
+  const response = await fetch(
+    buildUrl("/api/v1/dashboard-review/insights/dataset-readiness"),
+    {
+      headers: buildAuthHeaders(),
+      signal,
+    }
+  )
+  return handleResponse<DatasetReadinessInsight>(response)
+}
+
+export const getRecentActivityInsights = async (signal?: AbortSignal) => {
+  const response = await fetch(
+    buildUrl("/api/v1/dashboard-review/insights/recent-activity"),
+    {
+      headers: buildAuthHeaders(),
+      signal,
+    }
+  )
+  return handleResponse<RecentActivityInsight>(response)
+}
+
+export const getLabelCoverageInsights = async (signal?: AbortSignal) => {
+  const response = await fetch(
+    buildUrl("/api/v1/dashboard-review/insights/label-coverage"),
+    {
+      headers: buildAuthHeaders(),
+      signal,
+    }
+  )
+  return handleResponse<LabelCoverageInsight>(response)
+}
+
+export const getRedeploymentStatusInsights = async (signal?: AbortSignal) => {
+  const response = await fetch(
+    buildUrl("/api/v1/dashboard-review/insights/redeployment-status"),
+    {
+      headers: buildAuthHeaders(),
+      signal,
+    }
+  )
+  return handleResponse<RedeploymentStatusInsight>(response)
+}
+
+export const getCurrentDeployedModelInsights = async (signal?: AbortSignal) => {
+  const response = await fetch(
+    buildUrl("/api/v1/dashboard-review/insights/current-deployed-model"),
+    {
+      headers: buildAuthHeaders(),
+      signal,
+    }
+  )
+  const payload = await handleResponse<CurrentDeployedModelInsight>(response)
+  return mapCurrentDeployedModel(payload)
 }
