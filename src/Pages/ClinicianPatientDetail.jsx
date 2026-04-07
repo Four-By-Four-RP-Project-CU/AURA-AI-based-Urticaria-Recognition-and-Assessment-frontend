@@ -142,6 +142,8 @@ export default function ClinicianPatientDetail() {
   const [reviewStatus, setReviewStatus] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isExplainabilityLoading, setIsExplainabilityLoading] = useState(false);
+  const [isLlmLoading, setIsLlmLoading] = useState(false);
   const [apiError, setApiError] = useState(null);
   const [zoomImage, setZoomImage] = useState(null);
 
@@ -193,11 +195,13 @@ export default function ClinicianPatientDetail() {
     let isMounted = true;
     const fetchPatientDashboard = async () => {
       setIsLoading(true);
+      setIsExplainabilityLoading(false);
+      setIsLlmLoading(false);
       setApiError(null);
       try {
-        const [casesResponse, dashboardResponse] = await Promise.all([
+        const [casesResponse, baseDashboardResponse] = await Promise.all([
           getCases(),
-          getDashboard(patientId, diseaseType, true),
+          getDashboard(patientId, diseaseType, false, false),
         ]);
         if (isMounted) {
           const matchedCase = casesResponse.find(
@@ -212,15 +216,41 @@ export default function ClinicianPatientDetail() {
                 }
               : fallbackPatient
           );
-          setDashboard(dashboardResponse);
+          setDashboard(baseDashboardResponse);
+          setIsLoading(false);
+        }
+        if (isMounted) {
+          setIsExplainabilityLoading(true);
+        }
+        const explainabilityDashboardResponse = await getDashboard(
+          patientId,
+          diseaseType,
+          true,
+          false
+        );
+        if (isMounted) {
+          setDashboard((prev) => ({ ...(prev || {}), ...explainabilityDashboardResponse }));
+          setIsExplainabilityLoading(false);
+          setIsLlmLoading(true);
+        }
+        const llmDashboardResponse = await getDashboard(
+          patientId,
+          diseaseType,
+          true,
+          true
+        );
+        if (isMounted) {
+          setDashboard((prev) => ({ ...(prev || {}), ...llmDashboardResponse }));
         }
       } catch (error) {
         if (isMounted) {
           setApiError("Backend unavailable, unable to load patient data.");
+          setIsLoading(false);
+          setIsExplainabilityLoading(false);
         }
       } finally {
         if (isMounted) {
-          setIsLoading(false);
+          setIsLlmLoading(false);
         }
       }
     };
@@ -519,7 +549,11 @@ export default function ClinicianPatientDetail() {
                   Key factors influencing the assessment
                 </p>
                 <div className="space-y-3">
-                  {shapFeatures.length ? (
+                  {isExplainabilityLoading ? (
+                    <p className="text-sm text-slate-500">
+                      Loading SHAP feature contributions...
+                    </p>
+                  ) : shapFeatures.length ? (
                     shapFeatures.map((feature) => (
                       <FeatureBar
                         key={feature.name}
@@ -538,7 +572,11 @@ export default function ClinicianPatientDetail() {
                 </p>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="relative overflow-hidden rounded-lg border border-cyan-100/60 dark:border-slate-700/60">
-                    {baseImageUrl ? (
+                    {isExplainabilityLoading ? (
+                      <div className="flex h-72 items-center justify-center text-sm text-slate-500">
+                        Loading clinical image...
+                      </div>
+                    ) : baseImageUrl ? (
                       <>
                         <img
                           src={baseImageUrl}
@@ -560,7 +598,11 @@ export default function ClinicianPatientDetail() {
                     )}
                   </div>
                   <div className="relative overflow-hidden rounded-lg border border-cyan-100/60 dark:border-slate-700/60">
-                    {gradCamUrl ? (
+                    {isExplainabilityLoading ? (
+                      <div className="flex h-72 items-center justify-center text-sm text-slate-500">
+                        Loading Grad-CAM image...
+                      </div>
+                    ) : gradCamUrl ? (
                       <>
                         <img
                           src={gradCamUrl}
@@ -590,16 +632,16 @@ export default function ClinicianPatientDetail() {
         <div className="grid gap-6 lg:grid-cols-3 animate-fade-in-delay-3">
           <Card className={`lg:col-span-3 ${cardClass}`}>
             <SectionHeader
-              title="LLM Explanation"
-              subtitle="Clinician-readable summary generated from the structured explainability evidence."
+              title="Clinical Interpretation Summary"
+              subtitle="Clinician-readable summary generated from structured explainability evidence."
             />
-            {isLoading ? (
+            {isLlmLoading ? (
               <p className="mt-6 text-sm text-slate-500">
-                Loading LLM explanation...
+                Loading clinical interpretation summary...
               </p>
             ) : !llmExplainability ? (
               <p className="mt-6 text-sm text-slate-500">
-                LLM explanation unavailable. Structured SHAP and Grad-CAM evidence remains visible.
+                Clinical interpretation summary unavailable. Structured SHAP and Grad-CAM evidence remains visible.
               </p>
             ) : (
               <div className="mt-6 grid gap-5">
