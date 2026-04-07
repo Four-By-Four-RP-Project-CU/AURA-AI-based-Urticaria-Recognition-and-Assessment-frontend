@@ -786,6 +786,25 @@ const AnalyzePage = () => {
     riskContextSummary.thyroid_flag ? 'Thyroid flag raised' : null,
     riskContextSummary.autoimmune_flag ? 'Autoimmune flag raised' : null,
   ].filter(Boolean);
+  const compactRiskNote = integratedClinicalNote
+    ? integratedClinicalNote
+        .replace(/^Risk profiling suggests\s*/i, 'Risk profile: ')
+        .replace(/Systemic risk assessment indicates\s*/i, '')
+        .replace(/Risk module interpretation:\s*/i, 'Recommendation context: ')
+    : '';
+  const compactRiskHighlights = [
+    riskContextSummary.severity_band ? { label: 'Severity', value: riskContextSummary.severity_band } : null,
+    riskContextSummary.sideeffect_level ? { label: 'Side-effect', value: riskContextSummary.sideeffect_level } : null,
+    riskContextSummary.thyroid_flag || riskContextSummary.autoimmune_flag
+      ? {
+          label: 'Flags',
+          value: [
+            riskContextSummary.thyroid_flag ? 'Thyroid' : null,
+            riskContextSummary.autoimmune_flag ? 'Autoimmune' : null,
+          ].filter(Boolean).join(', '),
+        }
+      : null,
+  ].filter(Boolean);
 
   const alignLabel = {
     aligned: { text: '✓ Aligned with UAS7 severity', cls: 'text-emerald-600 dark:text-emerald-400' },
@@ -850,26 +869,41 @@ const AnalyzePage = () => {
 
         {/* ── Prediction row ─────────────────────────────────────────────── */}
         {(integratedClinicalNote || riskContextBadges.length > 0) && (
-          <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 rounded-xl p-5 mb-4">
-            <div className="flex items-center gap-2 mb-3">
-              <FaHeartbeat className="text-emerald-600 dark:text-emerald-400" />
-              <h3 className="text-sm font-bold text-emerald-800 dark:text-emerald-300">Integrated Risk Context</h3>
-            </div>
-            {integratedClinicalNote && (
-              <p className="text-sm text-emerald-900 dark:text-emerald-200 leading-relaxed mb-3">
-                {integratedClinicalNote}
-              </p>
-            )}
-            {riskContextBadges.length > 0 && (
+          <div className="mb-4 rounded-2xl border border-emerald-200 dark:border-emerald-700 bg-gradient-to-r from-emerald-50 via-teal-50 to-cyan-50 dark:from-emerald-900/20 dark:via-teal-900/20 dark:to-cyan-900/20 shadow-sm px-5 py-4">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-sm">
+                  <FaHeartbeat size={16} />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-emerald-900 dark:text-emerald-200">Risk-Informed Summary</p>
+                  <p className="text-xs text-emerald-700/80 dark:text-emerald-300/80">
+                    Compact treatment-support context from the linked risk assessment
+                  </p>
+                </div>
+              </div>
               <div className="flex flex-wrap gap-2">
-                {riskContextBadges.map((badge) => (
-                  <span
-                    key={badge}
-                    className="px-3 py-1 rounded-full bg-white dark:bg-gray-800 border border-emerald-200 dark:border-emerald-700 text-xs font-semibold text-emerald-700 dark:text-emerald-300"
+                {compactRiskHighlights.map((item) => (
+                  <div
+                    key={item.label}
+                    className="min-w-[140px] rounded-xl border border-emerald-200 dark:border-emerald-700 bg-white/90 dark:bg-gray-800 px-3 py-2 shadow-sm"
                   >
-                    {badge}
-                  </span>
+                    <p className="text-[11px] uppercase tracking-wide font-bold text-emerald-600 dark:text-emerald-400">
+                      {item.label}
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-gray-800 dark:text-gray-100">
+                      {item.value}
+                    </p>
+                  </div>
                 ))}
+              </div>
+            </div>
+
+            {compactRiskNote && (
+              <div className="mt-4 rounded-xl border border-emerald-200/80 dark:border-emerald-700/70 bg-white/80 dark:bg-gray-900/35 px-4 py-3">
+                <p className="text-sm text-gray-700 dark:text-gray-200 leading-relaxed">
+                  {compactRiskNote}
+                </p>
               </div>
             )}
           </div>
