@@ -215,6 +215,9 @@ const AnalyzePage = () => {
         riskProfile: parsed?.result || null,
         extractedLabs,
       });
+      if (!caseId && parsed?.result?.case_id) {
+        setCaseId(String(parsed.result.case_id));
+      }
 
       setLabs(prev => ({
         CRP: prev.CRP || (extractedLabs.CRP != null ? String(extractedLabs.CRP) : prev.CRP),
@@ -331,6 +334,9 @@ const AnalyzePage = () => {
         ? await callAnalyzeFromRisk(buildRiskHandoffFormData())
         : await callAnalyze(buildFormData());
       setResult(data);
+      if (data?.case_id) {
+        setCaseId(String(data.case_id));
+      }
 
       // ── Persist to analysis records list ─────────────────────────────
       const record = {
@@ -338,7 +344,7 @@ const AnalyzePage = () => {
         _id: Date.now(),
         _ts: new Date().toISOString(),
         _patientName: patientName || 'Anonymous',
-        _caseId: caseId || '—',
+        _caseId: caseId || data?.case_id || '—',
         _skinPreview: skinPreview || null,
         _labs: { ...labs },
         _clinical: { weight, height, itchingScore, ageFirstSymptoms, diagnosedAge },
