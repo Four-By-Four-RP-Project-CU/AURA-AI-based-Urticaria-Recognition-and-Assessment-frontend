@@ -139,6 +139,7 @@ export default function RiskAssessment() {
   const [form, setForm]               = useState(EMPTY_FORM);
   const [files, setFiles]             = useState([]);
   const [ocrData, setOcrData]         = useState(null);
+  const [ocrCaseId, setOcrCaseId]     = useState("");
   const [ocrLoading, setOcrLoading]   = useState(false);
   const [submitting, setSubmitting]   = useState(false);
   const [voiceActive, setVoiceActive] = useState(false);
@@ -175,6 +176,7 @@ export default function RiskAssessment() {
       const data = await res.json();
       const labs = data.ocr_info?.labs_extracted ?? {};
       setOcrData(labs);
+      setOcrCaseId(data.case_id || "");
       const prefilled = {};
       if (labs.CRP  != null) prefilled.CRP  = String(labs.CRP);
       if (labs.FT4  != null) prefilled.FT4  = String(labs.FT4);
@@ -214,6 +216,7 @@ export default function RiskAssessment() {
         investigations_raw: form.investigations_raw || "",
         categorical,
       };
+      if (ocrCaseId)        body.case_id       = ocrCaseId;
       if (form.Age)           body.Age           = parseFloat(form.Age);
       if (form.Weight)        body.Weight        = parseFloat(form.Weight);
       if (form.Height)        body.Height        = parseFloat(form.Height);
@@ -233,7 +236,7 @@ export default function RiskAssessment() {
         throw new Error(msg);
       }
       const result = await res.json();
-      const snapshot = { result, form, ocrData, files: files.map((f) => f.name) };
+      const snapshot = { result, form, ocrData, ocrCaseId, files: files.map((f) => f.name) };
       sessionStorage.setItem("aura_risk_result", JSON.stringify(snapshot));
       // Persist to history in localStorage
       try {
@@ -308,7 +311,7 @@ export default function RiskAssessment() {
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm font-medium transition-all border border-white/20">
               <HiRefresh className="w-4 h-4" /> Sample
             </button>
-            <button type="button" onClick={() => { setForm(EMPTY_FORM); setOcrData(null); setFiles([]); sessionStorage.removeItem("aura_risk_result"); }}
+            <button type="button" onClick={() => { setForm(EMPTY_FORM); setOcrData(null); setOcrCaseId(""); setFiles([]); sessionStorage.removeItem("aura_risk_result"); }}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm font-medium transition-all border border-white/20">
               <HiX className="w-4 h-4" /> Clear
             </button>
