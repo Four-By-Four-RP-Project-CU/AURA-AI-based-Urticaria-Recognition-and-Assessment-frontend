@@ -10,7 +10,13 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, PieChart, Pie, Cell,
 } from 'recharts';
-import { callAnalyze, callExtractLabs, callReportPdf } from '../../api/aura';
+import {
+  callAnalyze,
+  callAnalyzeFromRisk,
+  callExtractLabs,
+  callReportPdf,
+  callReportPdfFromRisk,
+} from '../../api/aura';
 
 // ── Display metadata ──────────────────────────────────────────────────────────
 const DRUG_META = {
@@ -153,6 +159,7 @@ const AnalyzePage = () => {
   const isViewingRecord = !!location.state?.viewRecord;
   const [phase, setPhase] = useState('form'); // 'form' | 'loading' | 'results'
   const [result, setResult] = useState(null);
+  const [riskHandoff, setRiskHandoff] = useState(null);
 
   // Patient
   const [caseId, setCaseId] = useState('');
@@ -194,6 +201,32 @@ const AnalyzePage = () => {
     if (rec._labs) setLabs(rec._labs);
     setPhase('results');
   }, []);
+
+  useEffect(() => {
+    if (isViewingRecord) return;
+    try {
+      const raw = sessionStorage.getItem('aura_risk_result');
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      const extractedLabs = parsed?.ocrData || parsed?.result?.ocr_info?.labs_extracted || null;
+      if (!extractedLabs || typeof extractedLabs !== 'object') return;
+
+      setRiskHandoff({
+        riskProfile: parsed?.result || null,
+        extractedLabs,
+      });
+
+      setLabs(prev => ({
+        CRP: prev.CRP || (extractedLabs.CRP != null ? String(extractedLabs.CRP) : prev.CRP),
+        FT4: prev.FT4 || (extractedLabs.FT4 != null ? String(extractedLabs.FT4) : prev.FT4),
+        IgE: prev.IgE || (extractedLabs.IgE != null ? String(extractedLabs.IgE) : prev.IgE),
+        VitD: prev.VitD || (extractedLabs.VitD != null ? String(extractedLabs.VitD) : prev.VitD),
+        Age: prev.Age || (extractedLabs.Age != null ? String(extractedLabs.Age) : prev.Age),
+      }));
+    } catch {
+      // Ignore malformed risk handoff payloads.
+    }
+  }, [isViewingRecord]);
 
   const skinInputRef = useRef();
   const labInputRef = useRef();
@@ -256,6 +289,36 @@ const AnalyzePage = () => {
     return fd;
   };
 
+  const hasRiskHandoff = !!riskHandoff?.extractedLabs;
+
+  const buildRiskHandoffFormData = () => {
+    const fd = new FormData();
+    fd.append('skin_image', skinImage);
+    if (caseId.trim())       fd.append('case_id', caseId.trim());
+    if (patientName.trim())  fd.append('patient_name', patientName.trim());
+    if (labs.CRP)  fd.append('CRP',  labs.CRP);
+    if (labs.FT4)  fd.append('FT4',  labs.FT4);
+    if (labs.IgE)  fd.append('IgE',  labs.IgE);
+    if (labs.VitD) fd.append('VitD', labs.VitD);
+    if (labs.Age)  fd.append('Age',  labs.Age);
+    if (weight)            fd.append('Weight',                         weight);
+    if (height)            fd.append('Height',                         height);
+    if (itchingScore)      fd.append('Itching_score',                  itchingScore);
+    if (ageFirstSymptoms)  fd.append('Age_experienced_first_symptoms', ageFirstSymptoms);
+    if (diagnosedAge)      fd.append('Diagnosed_at_the_age_of',        diagnosedAge);
+    if (uas7)              fd.append('UAS7',                           uas7);
+    if (dailyWheal)        fd.append('daily_wheal_avg',                dailyWheal);
+    if (dailyPruritus)     fd.append('daily_pruritus_avg',             dailyPruritus);
+    fd.append('abstain_threshold', abstainThreshold);
+    if (riskHandoff?.riskProfile) {
+      fd.append('risk_profile_json', JSON.stringify(riskHandoff.riskProfile));
+    }
+    if (riskHandoff?.extractedLabs) {
+      fd.append('extracted_labs_json', JSON.stringify(riskHandoff.extractedLabs));
+    }
+    return fd;
+  };
+
   const handleAnalyze = async () => {
     if (!skinImage) {
       toast.error('A skin photograph is required.');
@@ -263,7 +326,10 @@ const AnalyzePage = () => {
     }
     setPhase('loading');
     try {
-      const data = await callAnalyze(buildFormData());
+      const shouldReuseRiskLabs = hasRiskHandoff && !labReports.length;
+      const data = shouldReuseRiskLabs
+        ? await callAnalyzeFromRisk(buildRiskHandoffFormData())
+        : await callAnalyze(buildFormData());
       setResult(data);
 
       // ── Persist to analysis records list ─────────────────────────────
@@ -277,6 +343,7 @@ const AnalyzePage = () => {
         _labs: { ...labs },
         _clinical: { weight, height, itchingScore, ageFirstSymptoms, diagnosedAge },
         _uas7Input: { uas7, dailyWheal, dailyPruritus },
+        _riskHandoff: shouldReuseRiskLabs ? riskHandoff : null,
       };
       try {
         const existing = JSON.parse(localStorage.getItem('aura_analysis_records') || '[]');
@@ -306,11 +373,14 @@ const AnalyzePage = () => {
     if (!skinImage) return;
     const tid = toast.loading('Generating PDF report…');
     try {
-      const fd = buildFormData();
+      const shouldReuseRiskLabs = hasRiskHandoff && !labReports.length;
+      const fd = shouldReuseRiskLabs ? buildRiskHandoffFormData() : buildFormData();
       // Pass the already-computed result so the PDF backend skips re-inference,
       // guaranteeing the PDF shows exactly what the dashboard shows.
       if (result) fd.append('cached_result', JSON.stringify(result));
-      const { blob, filename } = await callReportPdf(fd);
+      const { blob, filename } = shouldReuseRiskLabs
+        ? await callReportPdfFromRisk(fd)
+        : await callReportPdf(fd);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url; a.download = filename; a.click();
@@ -356,6 +426,15 @@ const AnalyzePage = () => {
 
           {/* 2 — Image Uploads */}
           <SectionCard title="Image Uploads" icon={FaImage} iconColor="text-indigo-600">
+            {hasRiskHandoff && !isViewingRecord && (
+              <div className="mb-4 rounded-xl border border-emerald-200 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/20 p-4 text-sm text-emerald-800 dark:text-emerald-300">
+                <p className="font-semibold mb-1">Risk Assessment Handoff Ready</p>
+                <p>
+                  Extracted lab values from the latest risk assessment have been loaded automatically.
+                  You only need to upload the skin image unless you want to replace the lab-report input.
+                </p>
+              </div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Skin photo */}
               <div>

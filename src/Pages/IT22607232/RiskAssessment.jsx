@@ -3,8 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   HiUpload, HiSparkles, HiCheckCircle, HiX, HiPhotograph,
   HiChartBar, HiMicrophone, HiRefresh,
-  HiBeaker, HiClipboardList, HiAnnotation,
-  HiLightningBolt, HiShieldCheck,
+  HiBeaker, HiClipboardList,
 } from "react-icons/hi";
 import { toast } from "react-toastify";
 
@@ -100,42 +99,8 @@ const SAMPLE = {
 };
 
 // --- UI Helpers ---
-function SectionCard({ title, icon: Icon, color, children }) {
-  return (
-    <div className={`rounded-2xl border ${color.border} ${color.bg} overflow-hidden`}>
-      <div className={`${color.header} px-4 py-3 flex items-center gap-2`}>
-        <Icon className="w-4 h-4 text-white" />
-        <span className="text-white font-semibold text-sm">{title}</span>
-      </div>
-      <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">{children}</div>
-    </div>
-  );
-}
-
-function FieldRow({ label, hint, children }) {
-  return (
-    <div className="flex flex-col gap-1">
-      <label className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">{label}</label>
-      {hint && <p className="text-xs text-gray-400 leading-tight">{hint}</p>}
-      {children}
-    </div>
-  );
-}
-
 const INPUT_CLS =
   "w-full px-3 py-2 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all";
-
-function MicBtn({ onClick, active }) {
-  return (
-    <button type="button" onClick={onClick} title="Click to fill by voice"
-      className={`p-1.5 rounded-lg transition-all flex-shrink-0 ${active
-        ? "bg-red-500 text-white animate-pulse"
-        : "bg-gray-100 dark:bg-gray-700 text-gray-400 hover:bg-cyan-100 hover:text-cyan-600 dark:hover:bg-cyan-900/40 dark:hover:text-cyan-400"}`}
-    >
-      <HiMicrophone className="w-4 h-4" />
-    </button>
-  );
-}
 
 function OcrChip() {
   return (
@@ -145,6 +110,30 @@ function OcrChip() {
   );
 }
 
+// Pill-button group for selecting one option
+/* eslint-disable react/prop-types */
+function PillGroup({ options, value, onChange }) {
+  return (
+    <div className="flex flex-wrap gap-2 mt-1">
+      {options.map((opt) => (
+        <button
+          key={opt}
+          type="button"
+          onClick={() => onChange(value === opt ? "" : opt)}
+          className={`px-4 py-2 rounded-full text-sm font-medium border transition-all ${
+            value === opt
+              ? "bg-cyan-600 border-cyan-600 text-white shadow-sm"
+              : "bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-cyan-400 hover:text-cyan-600 dark:hover:text-cyan-400"
+          }`}
+        >
+          {opt}
+        </button>
+      ))}
+    </div>
+  );
+}
+/* eslint-enable react/prop-types */
+
 // --- Main Component ---
 export default function RiskAssessment() {
   const [form, setForm]               = useState(EMPTY_FORM);
@@ -152,8 +141,6 @@ export default function RiskAssessment() {
   const [ocrData, setOcrData]         = useState(null);
   const [ocrLoading, setOcrLoading]   = useState(false);
   const [submitting, setSubmitting]   = useState(false);
-  const [listening, setListening]     = useState(false);
-  const [voiceField, setVoiceField]   = useState(null);
   const [voiceActive, setVoiceActive] = useState(false);
   const [voiceQueue, setVoiceQueue]   = useState([]);
   const fileInputRef   = useRef(null);
@@ -278,17 +265,12 @@ export default function RiskAssessment() {
     const rec = new SR();
     rec.lang = "en-US"; rec.interimResults = false; rec.maxAlternatives = 1;
     recognitionRef.current = rec;
-    setListening(true); setVoiceField(fieldKey);
     speak(`Please say the value for ${fieldLabel}`);
-    rec.onresult = (e) => { const val = e.results[0][0].transcript; onResult(val); setListening(false); setVoiceField(null); };
-    rec.onerror = () => { setListening(false); setVoiceField(null); };
-    rec.onend   = () => { setListening(false); setVoiceField(null); };
+    rec.onresult = (e) => { const val = e.results[0][0].transcript; onResult(val); };
+    rec.onerror = () => {};
+    rec.onend   = () => {};
     setTimeout(() => rec.start(), 600);
   }, []);
-
-  const voiceFillField = (key, label) => {
-    listenFor(key, label, (val) => setForm((p) => ({ ...p, [key]: val })));
-  };
 
   useEffect(() => {
     if (!voiceActive) { if (recognitionRef.current) recognitionRef.current.stop(); window.speechSynthesis?.cancel(); return; }
@@ -311,24 +293,17 @@ export default function RiskAssessment() {
     speak(`Starting voice guide. ${allFields.length} empty fields to fill.`);
   };
 
-  const filled = Object.values(form).filter((v) => v !== "").length;
-  const total  = Object.keys(form).length;
-  const pct    = Math.round((filled / total) * 100);
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-cyan-50 to-teal-50 dark:from-gray-950 dark:via-slate-900 dark:to-gray-950">
 
       {/* Banner */}
-      <div className="bg-gradient-to-r from-cyan-600 via-teal-600 to-blue-700 px-5 py-5 sm:px-8">
-        <div className="max-w-4xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="bg-gradient-to-r from-cyan-600 via-teal-600 to-blue-700 px-5 py-4 sm:px-8">
+        <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">
           <div>
-            <div className="flex items-center gap-2 text-cyan-200 text-xs font-semibold mb-1">
-              <HiSparkles className="w-3.5 h-3.5" /> AURA AI Risk Profiling
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-white">Risk & Side-Effect Assessment</h1>
-            <p className="text-cyan-200 text-xs mt-1">CU Type  Severity  Secondary Risk  Side-Effect Profile</p>
+            <h1 className="text-xl sm:text-2xl font-extrabold text-white leading-tight">Risk &amp; Side-Effect Assessment</h1>
+            <p className="text-cyan-200 text-xs mt-0.5">All fields optional · AI fills missing values automatically</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 shrink-0">
             <button type="button" onClick={() => { setForm(SAMPLE); toast.info("Sample data loaded!"); }}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm font-medium transition-all border border-white/20">
               <HiRefresh className="w-4 h-4" /> Sample
@@ -339,24 +314,16 @@ export default function RiskAssessment() {
             </button>
           </div>
         </div>
-        <div className="max-w-4xl mx-auto mt-3">
-          <div className="flex justify-between text-xs text-cyan-200 mb-1">
-            <span>Form completion</span><span>{pct}% ({filled}/{total} fields)</span>
-          </div>
-          <div className="h-1.5 bg-white/20 rounded-full overflow-hidden">
-            <div className="h-full rounded-full bg-white transition-all duration-500" style={{ width: `${pct}%` }} />
-          </div>
-        </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 pt-8 space-y-8">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-6 space-y-6 pb-8">
 
-        {/* SECTION 1 */}
+        {/* ── STEP 1: Lab Report Upload (unchanged) ── */}
         <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden">
-          <div className="bg-gradient-to-r from-violet-600 to-purple-700 px-5 py-4 flex items-center gap-2">
+          <div className="bg-gradient-to-r from-violet-600 to-purple-700 px-5 py-3.5 flex items-center gap-2">
             <HiPhotograph className="w-5 h-5 text-white" />
-            <h2 className="text-white font-bold">Step 1  Upload Lab Report Images</h2>
-            <span className="ml-auto text-xs text-violet-200 hidden sm:block">AI detects CRP  FT4  IgE  Vitamin D</span>
+            <h2 className="text-white font-bold">Step 1 · Upload Lab Report Images</h2>
+            <span className="ml-auto text-xs text-violet-200 hidden sm:block">AI detects CRP · FT4 · IgE · Vitamin D</span>
           </div>
           <div className="p-5 space-y-4">
             <div className="border-2 border-dashed border-violet-300 dark:border-violet-700 rounded-2xl p-8 text-center cursor-pointer hover:border-violet-500 hover:bg-violet-50 dark:hover:bg-violet-950/30 transition-all"
@@ -365,7 +332,7 @@ export default function RiskAssessment() {
               onDrop={(e) => { e.preventDefault(); addFiles(Array.from(e.dataTransfer.files)); }}>
               <HiUpload className="w-10 h-10 text-violet-400 mx-auto mb-2" />
               <p className="font-semibold text-gray-700 dark:text-gray-300">Drop images here, or click to browse</p>
-              <p className="text-sm text-gray-400 mt-1">JPG  PNG  PDF  TIFF  OCR extracts lab values automatically</p>
+              <p className="text-sm text-gray-400 mt-1">JPG · PNG · PDF · TIFF — OCR extracts lab values automatically</p>
               <input ref={fileInputRef} type="file" multiple accept="image/*,.pdf" className="hidden"
                 onChange={(e) => addFiles(Array.from(e.target.files || []))} />
             </div>
@@ -395,140 +362,118 @@ export default function RiskAssessment() {
             {ocrData && (
               <div className="bg-green-50 dark:bg-green-950/30 rounded-xl border border-green-300 dark:border-green-800 p-4">
                 <p className="flex items-center gap-2 text-green-700 dark:text-green-400 font-semibold text-sm mb-3">
-                  <HiCheckCircle className="w-5 h-5" /> OCR Complete  values auto-filled below
+                  <HiCheckCircle className="w-5 h-5" /> OCR Complete — values auto-filled below
                 </p>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {["CRP","FT4","IgE","VitD"].map((k) => (
                     <div key={k} className="text-center p-2.5 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
                       <p className="text-xs text-gray-500 font-medium">{k}</p>
                       <p className={`text-xl font-extrabold mt-0.5 ${ocrData[k] != null ? "text-green-600 dark:text-green-400" : "text-gray-300 dark:text-gray-600"}`}>
-                        {ocrData[k] != null ? ocrData[k] : ""}
+                        {ocrData[k] != null ? ocrData[k] : "—"}
                       </p>
-                      <p className="text-xs text-gray-400">{ocrData[k] != null ? "extracted " : "not found"}</p>
+                      <p className="text-xs text-gray-400">{ocrData[k] != null ? "extracted" : "not found"}</p>
                     </div>
                   ))}
                 </div>
               </div>
             )}
-            <p className="text-center text-xs text-gray-400">Skip this step to enter lab values manually in Step 2</p>
+            <p className="text-center text-xs text-gray-400">Skip this step to enter lab values manually below</p>
           </div>
         </div>
 
-        {/* SECTION 2 */}
+        {/* ── STEP 2: Lab Values + Demographics + Notes ── */}
         <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden">
-          <div className="bg-gradient-to-r from-teal-600 to-cyan-600 px-5 py-4 flex items-center gap-2">
+          <div className="bg-gradient-to-r from-teal-600 to-cyan-600 px-5 py-3.5 flex items-center gap-2">
             <HiBeaker className="w-5 h-5 text-white" />
-            <h2 className="text-white font-bold">Step 2  Lab Values &amp; Demographics</h2>
-            <span className="ml-auto text-xs text-teal-200 hidden sm:block">All optional  AI imputes missing values</span>
+            <h2 className="text-white font-bold">Step 2 · Lab Values &amp; Quick Info</h2>
+            <span className="ml-auto text-xs text-teal-200 hidden sm:block">All optional</span>
           </div>
-          <div className="p-5 space-y-6">
-            <div>
-              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">Laboratory Values</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {LAB_FIELDS.map((f) => (
-                  <FieldRow key={f.key}
-                    label={<span className="flex items-center gap-1.5 flex-wrap">{f.label} <span className="text-gray-400 font-normal normal-case">({f.unit})</span>{ocrData?.[f.key] != null && <OcrChip />}</span>}
-                    hint={f.hint}>
-                    <div className="flex items-center gap-1.5">
-                      <input name={f.key} type="number" step={f.step} min="0" value={form[f.key]} onChange={change}
-                        placeholder={f.placeholder}
-                        className={`${INPUT_CLS} ${ocrData?.[f.key] != null ? "border-violet-400 dark:border-violet-600 bg-violet-50 dark:bg-violet-950/30" : ""}`} />
-                      <MicBtn active={listening && voiceField === f.key} onClick={() => voiceFillField(f.key, `${f.label} in ${f.unit}`)} />
-                    </div>
-                  </FieldRow>
-                ))}
+          <div className="p-5 space-y-5">
+
+            {/* Lab values — 2x2 compact grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {LAB_FIELDS.map((f) => (
+                <div key={f.key} className="flex flex-col gap-1">
+                  <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                    {f.label} <span className="font-normal text-gray-400">({f.unit})</span>
+                    {ocrData?.[f.key] != null && <OcrChip />}
+                  </label>
+                  <input name={f.key} type="number" step={f.step} min="0" value={form[f.key]} onChange={change}
+                    placeholder={f.placeholder}
+                    className={`${INPUT_CLS} ${ocrData?.[f.key] != null ? "border-violet-400 dark:border-violet-600 bg-violet-50 dark:bg-violet-950/30" : ""}`} />
+                  <span className="text-xs text-gray-400">{f.hint}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Age + Sex inline */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1 border-t border-gray-100 dark:border-gray-800">
+              <div className="flex flex-col gap-1">
+                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">Age (years)</p>
+                <input id="Age" name="Age" type="number" min={0} max={120} value={form.Age} onChange={change}
+                  placeholder="e.g. 30" className={INPUT_CLS} />
+              </div>
+              <div className="flex flex-col gap-1">
+                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">Sex</p>
+                <PillGroup
+                  options={["Male", "Female", "Other"]}
+                  value={form.Sex}
+                  onChange={(v) => setForm((p) => ({ ...p, Sex: v }))}
+                />
               </div>
             </div>
-            <div>
-              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">Patient Demographics</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <FieldRow label="Sex">
-                  <div className="flex items-center gap-1.5">
-                    <select name="Sex" value={form.Sex} onChange={change} className={INPUT_CLS}>
-                      <option value="">Select...</option>
-                      {["Male","Female","Other"].map((o) => <option key={o} value={o}>{o}</option>)}
-                    </select>
-                    <MicBtn active={listening && voiceField === "Sex"} onClick={() => voiceFillField("Sex", "sex")} />
-                  </div>
-                </FieldRow>
-                {DEMO_FIELDS.map((f) => (
-                  <FieldRow key={f.key} label={<span>{f.label} <span className="text-gray-400 font-normal">({f.unit})</span></span>}>
-                    <div className="flex items-center gap-1.5">
-                      <input name={f.key} type="number" min={f.min} max={f.max} value={form[f.key]} onChange={change}
-                        placeholder={f.placeholder} className={INPUT_CLS} />
-                      <MicBtn active={listening && voiceField === f.key} onClick={() => voiceFillField(f.key, `${f.label} in ${f.unit}`)} />
-                    </div>
-                  </FieldRow>
-                ))}
+
+            {/* Symptoms + Investigations — compact 2-row */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-gray-100 dark:border-gray-800">
+              <div className="flex flex-col gap-1">
+                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">Symptoms <span className="font-normal normal-case">(describe briefly)</span></p>
+                <textarea name="symptoms_raw" value={form.symptoms_raw} onChange={change} rows={2}
+                  placeholder="e.g. itchy red welts on arms, worsens at night..."
+                  className={`${INPUT_CLS} resize-none`} />
+              </div>
+              <div className="flex flex-col gap-1">
+                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">Investigation Results <span className="font-normal normal-case">(optional)</span></p>
+                <textarea name="investigations_raw" value={form.investigations_raw} onChange={change} rows={2}
+                  placeholder="e.g. elevated IgE, positive skin prick test..."
+                  className={`${INPUT_CLS} resize-none`} />
               </div>
             </div>
-            <div>
-              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">
-                Clinical Notes <span className="normal-case font-normal">(for AI language analysis)</span>
-              </p>
-              <div className="space-y-3">
-                <FieldRow label="Symptoms Description" hint="Describe itching, wheals, swelling, triggers, timing, severity">
-                  <div className="flex items-start gap-1.5">
-                    <textarea name="symptoms_raw" value={form.symptoms_raw} onChange={change} rows={3}
-                      placeholder="e.g. Severe itching with raised red welts on arms and torso, worsens at night..."
-                      className={`${INPUT_CLS} resize-none`} />
-                    <MicBtn active={listening && voiceField === "symptoms_raw"} onClick={() => voiceFillField("symptoms_raw", "symptoms description")} />
-                  </div>
-                </FieldRow>
-                <FieldRow label="Investigation Results" hint="Lab results, allergy tests, clinical findings">
-                  <div className="flex items-start gap-1.5">
-                    <textarea name="investigations_raw" value={form.investigations_raw} onChange={change} rows={3}
-                      placeholder="e.g. Elevated IgE 450 IU/mL, positive skin prick test for dust mites..."
-                      className={`${INPUT_CLS} resize-none`} />
-                    <MicBtn active={listening && voiceField === "investigations_raw"} onClick={() => voiceFillField("investigations_raw", "investigation results")} />
-                  </div>
-                </FieldRow>
-              </div>
-            </div>
+
           </div>
         </div>
 
-        {/* SECTION 3 */}
-        <div>
-          <div className="flex items-center gap-3 mb-4">
-            <div className="p-2.5 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-600 shadow">
-              <HiClipboardList className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h2 className="font-bold text-gray-900 dark:text-white text-lg">Step 3  Clinical Questionnaire</h2>
-              <p className="text-xs text-gray-400">5 questions · all optional · covers all 4 prediction outputs</p>
-            </div>
+        {/* ── STEP 3: Clinical Questions as pill-selectors ── */}
+        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden">
+          <div className="bg-gradient-to-r from-indigo-600 to-blue-600 px-5 py-3.5 flex items-center gap-2">
+            <HiClipboardList className="w-5 h-5 text-white" />
+            <h2 className="text-white font-bold">Step 3 · Quick Clinical Questions</h2>
+            <span className="ml-auto text-xs text-indigo-200 hidden sm:block">5 questions · all optional</span>
           </div>
-          <div className="space-y-4">
-            {CLINICAL_SECTIONS.map((sec) => (
-              <SectionCard key={sec.id} title={sec.title} icon={sec.icon} color={sec.color}>
-                {sec.fields.map((f) => (
-                  <FieldRow key={f.key} label={f.label}>
-                    <div className="flex items-center gap-1.5">
-                      <select name={f.key} value={form[f.key]} onChange={change} className={INPUT_CLS}>
-                        <option value="">Select...</option>
-                        {f.opt.map((o) => <option key={o} value={o}>{o}</option>)}
-                      </select>
-                      <MicBtn active={listening && voiceField === f.key} onClick={() => voiceFillField(f.key, f.label)} />
-                    </div>
-                  </FieldRow>
-                ))}
-              </SectionCard>
+          <div className="p-5 space-y-5">
+            {CLINICAL_SECTIONS.flatMap((sec) => sec.fields).map((f) => (
+              <div key={f.key}>
+                <p className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-1">{f.label}</p>
+                <PillGroup
+                  options={f.opt}
+                  value={form[f.key]}
+                  onChange={(v) => setForm((p) => ({ ...p, [f.key]: v }))}
+                />
+              </div>
             ))}
           </div>
         </div>
 
         {/* Submit */}
-        <div className="space-y-3 pb-6">
-          <div className="flex items-start gap-3 p-4 bg-cyan-50 dark:bg-cyan-950/30 rounded-xl border border-cyan-200 dark:border-cyan-800 text-sm text-cyan-800 dark:text-cyan-300">
+        <div className="space-y-3">
+          <div className="flex items-start gap-3 p-3.5 bg-cyan-50 dark:bg-cyan-950/30 rounded-xl border border-cyan-200 dark:border-cyan-800 text-sm text-cyan-800 dark:text-cyan-300">
             <HiSparkles className="w-4 h-4 flex-shrink-0 text-cyan-500 mt-0.5" />
-            <span>Unfilled fields are automatically imputed by the AI model. More complete data = more accurate predictions.</span>
+            <span>Unfilled fields are automatically imputed by the AI. More complete data = more accurate predictions.</span>
           </div>
           <button type="button" onClick={handleSubmit} disabled={submitting}
             className="w-full py-4 rounded-2xl font-extrabold text-lg text-white bg-gradient-to-r from-cyan-500 to-teal-600 hover:from-cyan-600 hover:to-teal-700 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-3 shadow-xl transition-all hover:scale-[1.01] active:scale-[0.99]">
             {submitting
               ? <><span className="animate-spin rounded-full border-2 border-white border-t-transparent w-6 h-6" /> Analyzing with AI...</>
-              : <><HiChartBar className="w-6 h-6" /> Generate Full Risk &amp; Side-Effect Profile</>}
+              : <><HiChartBar className="w-6 h-6" /> Generate Risk &amp; Side-Effect Profile</>}
           </button>
         </div>
       </div>

@@ -27,6 +27,14 @@ export async function callAnalyze(formData) {
   return res.json();
 }
 
+/** POST /analyze/from-risk — reuse labs extracted during risk assessment. */
+export async function callAnalyzeFromRisk(formData) {
+  const res = await _handleResponse(
+    await fetch('/analyze/from-risk', { method: 'POST', body: formData })
+  );
+  return res.json();
+}
+
 /** POST /extract/labs — returns { extracted: {CRP,FT4,IgE,VitD,Age,...}, warnings: [] }. */
 export async function callExtractLabs(formData) {
   const res = await _handleResponse(
@@ -39,6 +47,18 @@ export async function callExtractLabs(formData) {
 export async function callReportPdf(formData) {
   const res = await _handleResponse(
     await fetch('/report/pdf', { method: 'POST', body: formData })
+  );
+  const blob = await res.blob();
+  const cd = res.headers.get('Content-Disposition') || '';
+  const match = cd.match(/filename=([^;"'\s]+)/);
+  const filename = match ? match[1] : 'AURA_CSU_Report.pdf';
+  return { blob, filename };
+}
+
+/** POST /report/pdf/from-risk — generate the PDF while reusing risk-step labs. */
+export async function callReportPdfFromRisk(formData) {
+  const res = await _handleResponse(
+    await fetch('/report/pdf/from-risk', { method: 'POST', body: formData })
   );
   const blob = await res.blob();
   const cd = res.headers.get('Content-Disposition') || '';

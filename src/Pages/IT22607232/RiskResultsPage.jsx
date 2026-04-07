@@ -267,6 +267,12 @@ export default function RiskResultsPage() {
           </button>
           <div className="flex gap-2">
             <button
+              onClick={() => navigate("/analyze")}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium transition-all shadow-sm"
+            >
+              <HiSparkles className="w-4 h-4" /> Continue to Prescription
+            </button>
+            <button
               onClick={speakResults}
               title={speaking ? "Stop speaking" : "Read results aloud"}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all shadow-sm border ${
