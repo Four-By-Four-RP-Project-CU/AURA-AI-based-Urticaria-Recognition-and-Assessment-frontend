@@ -426,40 +426,161 @@ const AnalyzePage = () => {
 
           {/* 2 — Image Uploads */}
           <SectionCard title="Image Uploads" icon={FaImage} iconColor="text-indigo-600">
-            {hasRiskHandoff && !isViewingRecord && (
-              <div className="mb-4 rounded-xl border border-emerald-200 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/20 p-4 text-sm text-emerald-800 dark:text-emerald-300">
-                <p className="font-semibold mb-1">Risk Assessment Handoff Ready</p>
-                <p>
-                  Extracted lab values from the latest risk assessment have been loaded automatically.
-                  You only need to upload the skin image unless you want to replace the lab-report input.
-                </p>
+            {!isViewingRecord && (
+              <div className={`mb-4 overflow-hidden rounded-2xl border shadow-sm ${
+                hasRiskHandoff
+                  ? 'border-emerald-200 dark:border-emerald-700 bg-gradient-to-r from-emerald-50 via-teal-50 to-cyan-50 dark:from-emerald-900/20 dark:via-teal-900/20 dark:to-cyan-900/20'
+                  : 'border-amber-200 dark:border-amber-700 bg-gradient-to-r from-amber-50 via-orange-50 to-yellow-50 dark:from-amber-900/20 dark:via-orange-900/20 dark:to-yellow-900/20'
+              }`}>
+                <div className={`flex items-center justify-between px-5 py-3 border-b ${
+                  hasRiskHandoff
+                    ? 'border-emerald-200/70 dark:border-emerald-700/60'
+                    : 'border-amber-200/70 dark:border-amber-700/60'
+                }`}>
+                  <div className="flex items-center gap-3">
+                    <div className={`flex h-10 w-10 items-center justify-center rounded-xl text-white shadow-sm ${
+                      hasRiskHandoff
+                        ? 'bg-gradient-to-br from-emerald-500 to-teal-600'
+                        : 'bg-gradient-to-br from-amber-500 to-orange-600'
+                    }`}>
+                      {hasRiskHandoff ? <FaHeartbeat size={16} /> : <FaInfoCircle size={16} />}
+                    </div>
+                    <div>
+                      <p className={`text-sm font-bold ${
+                        hasRiskHandoff
+                          ? 'text-emerald-900 dark:text-emerald-200'
+                          : 'text-amber-900 dark:text-amber-200'
+                      }`}>
+                        {hasRiskHandoff ? 'CSU Clinical Handoff Active' : 'CSU Manual Intake Mode'}
+                      </p>
+                      <p className={`text-xs ${
+                        hasRiskHandoff
+                          ? 'text-emerald-700/80 dark:text-emerald-300/80'
+                          : 'text-amber-700/80 dark:text-amber-300/80'
+                      }`}>
+                        {hasRiskHandoff
+                          ? 'Risk assessment context is connected to this recommendation flow'
+                          : 'No linked risk assessment found. Continue with direct CSU upload and lab entry.'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className={`hidden sm:flex items-center gap-2 rounded-full bg-white/80 dark:bg-gray-900/40 px-3 py-1 text-xs font-semibold border ${
+                    hasRiskHandoff
+                      ? 'text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-700'
+                      : 'text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-700'
+                  }`}>
+                    <span className={`h-2 w-2 rounded-full ${hasRiskHandoff ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+                    {hasRiskHandoff ? 'Live handoff' : 'Manual mode'}
+                  </div>
+                </div>
+
+                <div className="px-5 py-4 space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs font-semibold">
+                    <span className={`min-h-[44px] rounded-2xl bg-white dark:bg-gray-800 px-4 py-2 shadow-sm flex items-center justify-center text-center border ${
+                      hasRiskHandoff
+                        ? 'border-emerald-200 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300'
+                        : 'border-amber-200 dark:border-amber-700 text-amber-700 dark:text-amber-300'
+                    }`}>
+                      {hasRiskHandoff ? 'Labs handoff: Ready' : 'Labs handoff: Not linked'}
+                    </span>
+                    <span className={`min-h-[44px] rounded-2xl bg-white dark:bg-gray-800 px-4 py-2 shadow-sm flex items-center justify-center text-center border ${
+                      hasRiskHandoff
+                        ? 'border-teal-200 dark:border-teal-700 text-teal-700 dark:text-teal-300'
+                        : 'border-orange-200 dark:border-orange-700 text-orange-700 dark:text-orange-300'
+                    }`}>
+                      {hasRiskHandoff ? 'Risk profile context: Linked' : 'Risk profile context: Not linked'}
+                    </span>
+                    <span className={`min-h-[44px] rounded-2xl bg-white dark:bg-gray-800 px-4 py-2 shadow-sm flex items-center justify-center text-center border ${
+                      hasRiskHandoff
+                        ? 'border-cyan-200 dark:border-cyan-700 text-cyan-700 dark:text-cyan-300'
+                        : 'border-yellow-200 dark:border-yellow-700 text-yellow-700 dark:text-yellow-300'
+                    }`}>
+                      {hasRiskHandoff ? 'Skin image required for CSU recommendation' : 'Upload skin image and labs manually'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className={`min-h-[92px] rounded-xl bg-white/80 dark:bg-gray-900/35 px-4 py-3 flex flex-col justify-between border ${
+                      hasRiskHandoff
+                        ? 'border-emerald-200/80 dark:border-emerald-700/70'
+                        : 'border-amber-200/80 dark:border-amber-700/70'
+                    }`}>
+                      <p className={`text-[11px] uppercase tracking-wide font-bold ${
+                        hasRiskHandoff
+                          ? 'text-emerald-600 dark:text-emerald-400'
+                          : 'text-amber-600 dark:text-amber-400'
+                      }`}>Step 1</p>
+                      <p className="mt-2 text-sm font-semibold text-gray-800 dark:text-gray-200 leading-snug">
+                        {hasRiskHandoff ? 'Risk profile completed' : 'No prior risk profile connected'}
+                      </p>
+                    </div>
+                    <div className={`min-h-[92px] rounded-xl bg-white/80 dark:bg-gray-900/35 px-4 py-3 flex flex-col justify-between border ${
+                      hasRiskHandoff
+                        ? 'border-teal-200/80 dark:border-teal-700/70'
+                        : 'border-orange-200/80 dark:border-orange-700/70'
+                    }`}>
+                      <p className={`text-[11px] uppercase tracking-wide font-bold ${
+                        hasRiskHandoff
+                          ? 'text-teal-600 dark:text-teal-400'
+                          : 'text-orange-600 dark:text-orange-400'
+                      }`}>Step 2</p>
+                      <p className="mt-2 text-sm font-semibold text-gray-800 dark:text-gray-200 leading-snug">
+                        {hasRiskHandoff ? 'Labs and context reused' : 'Provide labs by upload or manual values'}
+                      </p>
+                    </div>
+                    <div className={`min-h-[92px] rounded-xl bg-white/80 dark:bg-gray-900/35 px-4 py-3 flex flex-col justify-between border ${
+                      hasRiskHandoff
+                        ? 'border-cyan-200/80 dark:border-cyan-700/70'
+                        : 'border-yellow-200/80 dark:border-yellow-700/70'
+                    }`}>
+                      <p className={`text-[11px] uppercase tracking-wide font-bold ${
+                        hasRiskHandoff
+                          ? 'text-cyan-600 dark:text-cyan-400'
+                          : 'text-yellow-600 dark:text-yellow-500'
+                      }`}>Step 3</p>
+                      <p className="mt-2 text-sm font-semibold text-gray-800 dark:text-gray-200 leading-snug">
+                        {hasRiskHandoff ? 'Upload CSU skin image' : 'Upload CSU skin image to continue'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Skin photo */}
-              <div>
-                <FieldLabel label="CSU Skin Photograph" required />
+              <div className="rounded-2xl border border-blue-100 dark:border-blue-900/60 bg-gradient-to-b from-blue-50/60 to-white dark:from-blue-950/20 dark:to-transparent p-4 shadow-sm flex flex-col">
+                <div className="min-h-[74px] flex items-start justify-between gap-3 mb-4">
+                  <div>
+                    <FieldLabel label="CSU Skin Photograph" required />
+                    <p className="mt-1 text-xs text-blue-700/80 dark:text-blue-300/80">
+                      Capture the active wheal or erythema area for CSU recommendation.
+                    </p>
+                  </div>
+                  <span className="inline-flex items-center rounded-full border border-blue-200 bg-white/85 dark:bg-blue-950/40 px-3 py-1 text-[11px] font-semibold text-blue-700 dark:text-blue-300 whitespace-nowrap">
+                    Required
+                  </span>
+                </div>
                 <div
                   onClick={() => skinInputRef.current.click()}
                   onDragOver={e => e.preventDefault()}
                   onDrop={e => { e.preventDefault(); handleSkinFile(e.dataTransfer.files[0]); }}
-                  className="relative border-2 border-dashed border-blue-400 dark:border-blue-600 rounded-xl p-4 text-center cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors min-h-[10rem] flex flex-col items-center justify-center"
+                  className="relative flex-1 border-2 border-dashed border-blue-400 dark:border-blue-600 rounded-2xl p-5 text-center cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors min-h-[12rem] flex flex-col items-center justify-center"
                 >
                   {skinPreview ? (
                     <>
-                      <img src={skinPreview} alt="Preview" className="w-full h-40 object-cover rounded-lg" />
+                      <img src={skinPreview} alt="Preview" className="w-full h-44 object-cover rounded-xl" />
                       <button
                         type="button"
                         onClick={e => { e.stopPropagation(); setSkinImage(null); setSkinPreview(null); }}
-                        className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-1.5 text-xs shadow"
+                        className="absolute top-3 right-3 bg-red-500 hover:bg-red-600 text-white rounded-full p-1.5 text-xs shadow"
                       ><FaTimes /></button>
-                      {skinImage && <p className="text-xs text-gray-400 mt-1 truncate max-w-full">{skinImage.name}</p>}
+                      {skinImage && <p className="text-xs text-gray-400 mt-2 truncate max-w-full">{skinImage.name}</p>}
                     </>
                   ) : (
                     <>
-                      <FaImage className="text-4xl text-blue-300 mb-2" />
-                      <p className="text-sm text-gray-500 dark:text-gray-400">Drop skin photo here or click to upload</p>
-                      <p className="text-xs text-gray-400 mt-1">JPG / PNG — required for analysis</p>
+                      <FaImage className="text-4xl text-blue-300 mb-3" />
+                      <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Drop skin photo here or click to upload</p>
+                      <p className="text-xs text-gray-400 mt-1">JPG / PNG only</p>
                     </>
                   )}
                 </div>
@@ -467,44 +588,54 @@ const AnalyzePage = () => {
               </div>
 
               {/* Lab reports */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                <FieldLabel label="Lab Report Image(s)" unit="optional — OCR extracts CRP / FT4 / IgE / VitD" />
-                <button
-                    type="button"
-                    onClick={handleExtractLabs}
-                    disabled={!labReports.length || labAnalyzing}
-                    className="ml-2 flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow hover:shadow-purple-400/40 hover:scale-105 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 whitespace-nowrap"
-                  >
-                    {labAnalyzing ? (
-                      <>
-                        <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
-                        Extracting…
-                      </>
-                    ) : (
-                      <><FaFlask size={11} /> Analyse Lab Report</>
-                    )}
-                  </button>
+              <div className="rounded-2xl border border-purple-100 dark:border-purple-900/60 bg-gradient-to-b from-purple-50/60 to-white dark:from-purple-950/20 dark:to-transparent p-4 shadow-sm flex flex-col">
+                <div className="min-h-[74px] flex items-start justify-between gap-3 mb-4">
+                  <div>
+                    <FieldLabel label="Lab Report Image(s)" />
+                    <p className="mt-1 text-xs text-purple-700/80 dark:text-purple-300/80">
+                      Optional OCR source if you want to replace the risk-step lab handoff.
+                    </p>
+                  </div>
+                  <span className="inline-flex items-center rounded-full border border-purple-200 bg-white/85 dark:bg-purple-950/40 px-3 py-1 text-[11px] font-semibold text-purple-700 dark:text-purple-300 whitespace-nowrap">
+                    Optional
+                  </span>
                 </div>
                 <div
                   onClick={() => labInputRef.current.click()}
                   onDragOver={e => e.preventDefault()}
                   onDrop={e => { e.preventDefault(); setLabReports(p => [...p, ...Array.from(e.dataTransfer.files)]); }}
-                  className="border-2 border-dashed border-purple-400 dark:border-purple-600 rounded-xl p-4 text-center cursor-pointer hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors min-h-[10rem]"
+                  className="flex-1 border-2 border-dashed border-purple-400 dark:border-purple-600 rounded-2xl p-5 text-center cursor-pointer hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors min-h-[12rem] flex flex-col items-center justify-center"
                 >
-                  <FaFlask className="mx-auto text-4xl text-purple-300 mb-2" />
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Drop lab report images or click to upload</p>
-                  <p className="text-xs text-gray-400 mt-1">JPG / PNG / PDF — multiple files allowed</p>
+                  <FaFlask className="mx-auto text-4xl text-purple-300 mb-3" />
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Drop lab report images or click to upload</p>
+                  <p className="text-xs text-gray-400 mt-1">JPG / PNG / PDF, multiple files allowed</p>
                   {labReports.length > 0 && (
-                    <div className="mt-3 text-left space-y-1">
+                    <div className="mt-4 w-full text-left space-y-2">
                       {labReports.map((f, i) => (
-                        <div key={i} className="flex items-center justify-between bg-purple-50 dark:bg-purple-900/30 rounded px-2 py-1">
+                        <div key={i} className="flex items-center justify-between bg-purple-50 dark:bg-purple-900/30 rounded-lg px-3 py-2">
                           <span className="text-xs text-purple-700 dark:text-purple-300 truncate">{f.name}</span>
                           <button type="button" onClick={e => { e.stopPropagation(); setLabReports(p => p.filter((_, j) => j !== i)); }} className="ml-2 text-red-400 hover:text-red-600 text-xs"><FaTimes /></button>
                         </div>
                       ))}
                     </div>
                   )}
+                </div>
+                <div className="mt-4 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={handleExtractLabs}
+                    disabled={!labReports.length || labAnalyzing}
+                    className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow hover:shadow-purple-400/40 hover:scale-[1.02] transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 whitespace-nowrap"
+                  >
+                    {labAnalyzing ? (
+                      <>
+                        <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+                        Extracting...
+                      </>
+                    ) : (
+                      <><FaFlask size={11} /> Analyse Lab Report</>
+                    )}
+                  </button>
                 </div>
                 <input ref={labInputRef} type="file" accept="image/*,application/pdf" multiple className="hidden" onChange={e => setLabReports(p => [...p, ...Array.from(e.target.files)])} />
               </div>
@@ -646,6 +777,15 @@ const AnalyzePage = () => {
   const align = result?.guideline_step_alignment;
   const labsUsed = result?.used_features || {};
   const labSources = result?.lab_sources || {};
+  const riskContextSummary = result?.risk_context_summary || {};
+  const integratedClinicalNote = result?.integrated_clinical_note;
+  const riskContextBadges = [
+    riskContextSummary.urticaria_type ? `Type: ${riskContextSummary.urticaria_type}` : null,
+    riskContextSummary.severity_band ? `Severity: ${riskContextSummary.severity_band}` : null,
+    riskContextSummary.sideeffect_level ? `Side-effect risk: ${riskContextSummary.sideeffect_level}` : null,
+    riskContextSummary.thyroid_flag ? 'Thyroid flag raised' : null,
+    riskContextSummary.autoimmune_flag ? 'Autoimmune flag raised' : null,
+  ].filter(Boolean);
 
   const alignLabel = {
     aligned: { text: '✓ Aligned with UAS7 severity', cls: 'text-emerald-600 dark:text-emerald-400' },
@@ -709,6 +849,31 @@ const AnalyzePage = () => {
         ))}
 
         {/* ── Prediction row ─────────────────────────────────────────────── */}
+        {(integratedClinicalNote || riskContextBadges.length > 0) && (
+          <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 rounded-xl p-5 mb-4">
+            <div className="flex items-center gap-2 mb-3">
+              <FaHeartbeat className="text-emerald-600 dark:text-emerald-400" />
+              <h3 className="text-sm font-bold text-emerald-800 dark:text-emerald-300">Integrated Risk Context</h3>
+            </div>
+            {integratedClinicalNote && (
+              <p className="text-sm text-emerald-900 dark:text-emerald-200 leading-relaxed mb-3">
+                {integratedClinicalNote}
+              </p>
+            )}
+            {riskContextBadges.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {riskContextBadges.map((badge) => (
+                  <span
+                    key={badge}
+                    className="px-3 py-1 rounded-full bg-white dark:bg-gray-800 border border-emerald-200 dark:border-emerald-700 text-xs font-semibold text-emerald-700 dark:text-emerald-300"
+                  >
+                    {badge}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
           {/* Drug card */}
           <div className={`md:col-span-2 ${dm.lightBg} border-l-4 ${dm.border} rounded-xl p-6 shadow-md`}>
@@ -935,3 +1100,4 @@ const AnalyzePage = () => {
 };
 
 export default AnalyzePage;
+
