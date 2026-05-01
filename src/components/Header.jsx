@@ -94,11 +94,11 @@ const Header = () => {
               </span>
             </Dropdown.Header>
             
-            {user && user.email && user.email.toLowerCase() === "ramindunimesh2000@gmail.com" && (
+            {/* {user && user.email && user.email.toLowerCase() === "ramindunimesh2000@gmail.com" && ( */}
               <Link to="/dashboard">
                 <Dropdown.Item>Dashboard</Dropdown.Item>
               </Link>
-            )}
+            {/* )} */}
             <Link to="/profile">
               <Dropdown.Item>Profile</Dropdown.Item>
             </Link>
@@ -128,6 +128,18 @@ const Header = () => {
             Home
           </Link>
         </Navbar.Link>
+        <Navbar.Link active={path === "/clinician-dashboard"} as={"div"}>
+          <Link
+            to="/clinician-dashboard"
+            className={`text-lg font-semibold ${
+              path === "/clinician-dashboard"
+                ? "text-blue-600 dark:text-purple-400"
+                : "text-gray-700 dark:text-gray-300"
+            } hover:text-blue-600 dark:hover:text-purple-400 transition-colors`}
+          >
+            Clinician Dashboard
+          </Link>
+        </Navbar.Link>
         <Navbar.Link active={path === "/about"} as={"div"}>
           <Link
             to="/about"
@@ -150,6 +162,18 @@ const Header = () => {
             } hover:text-blue-600 dark:hover:text-purple-400 transition-colors`}
           >
             Contact
+          </Link>
+        </Navbar.Link>
+        <Navbar.Link active={path === "/active-learning/review"} as={"div"}>
+          <Link
+            to="/active-learning/review"
+            className={`text-lg font-semibold ${
+              path === "/active-learning/review"
+                ? "text-blue-600 dark:text-purple-400"
+                : "text-gray-700 dark:text-gray-300"
+            } hover:text-blue-600 dark:hover:text-purple-400 transition-colors`}
+          >
+            Review Dashboard
           </Link>
         </Navbar.Link>
       </Navbar.Collapse>

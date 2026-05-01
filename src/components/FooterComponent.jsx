@@ -75,6 +75,12 @@ const FooterComponent = () => {
                 >
                   Sign Up
                 </Footer.Link>
+                <Footer.Link
+                  href="/developer-integration-guide"
+                  className="hover:text-green-600 dark:hover:text-teal-400 transition-colors"
+                >
+                  Developer Guide
+                </Footer.Link>
               </Footer.LinkGroup>
             </div>
             <div>
