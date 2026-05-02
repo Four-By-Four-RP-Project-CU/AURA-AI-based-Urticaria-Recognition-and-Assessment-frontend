@@ -212,7 +212,7 @@ export default function ClinicianPatientDetail() {
               ? {
                   id: matchedCase.caseId,
                   age: matchedCase.age,
-                  gender: matchedCase.gender,
+                  gender: matchedCase.gender || "Unknown",
                 }
               : fallbackPatient
           );
@@ -562,7 +562,7 @@ export default function ClinicianPatientDetail() {
                       />
                     ))
                   ) : (
-                    <p className="text-sm text-slate-500">No SHAP data.</p>
+                    <p className="text-sm text-slate-500">SHAP feature contributions are unavailable for the current source record.</p>
                   )}
                 </div>
               </div>
