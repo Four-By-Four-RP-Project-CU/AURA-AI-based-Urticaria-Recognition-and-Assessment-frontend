@@ -624,6 +624,9 @@ export default function ClinicianPatientDetail() {
                     )}
                   </div>
                 </div>
+                <p className="text-sm text-amber-700 dark:text-amber-300">
+                  Note: Image visibility may vary depending on brightness, contrast, and image clarity. Heatmap emphasis should be interpreted together with the original clinical image.
+                </p>
               </div>
             </div>
           </Card>
