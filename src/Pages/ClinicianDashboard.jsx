@@ -19,6 +19,16 @@ function deriveStatus(uctValue) {
   return "Uncontrolled";
 }
 
+// Maps backend DiseaseControlInfo.status enum to display label
+function statusLabel(backendStatus) {
+  switch (backendStatus) {
+    case "CONTROLLED":         return "Controlled";
+    case "PARTIALLY_CONTROLLED": return "Partially Controlled";
+    case "UNCONTROLLED":       return "Uncontrolled";
+    default:                   return "Unknown";
+  }
+}
+
 function controlStatusTooltip(status) {
   if (status === "Controlled") {
     return "Symptoms are well controlled. The patient reports minimal or no impact from urticaria in daily life.";
@@ -176,15 +186,19 @@ export default function ClinicianDashboard() {
               const confidence = Number.isFinite(confidenceValue)
                 ? Math.round(confidenceValue * 100)
                 : null;
+              const backendStatus = dashboard.diseaseControlInfo?.status;
+              const resultStatus = backendStatus
+                ? statusLabel(backendStatus)
+                : deriveStatus(uctValue);
               return {
                 id: caseItem.caseId,
                 age: caseItem.age,
                 gender: caseItem.gender,
                 subtype: dashboard.prediction?.label || "N/A",
                 confidence: confidence ?? 0,
-                uct: uctValue ?? 0,
-                aect: aectValue ?? 0,
-                resultStatus: deriveStatus(uctValue),
+                uct: uctValue,
+                aect: aectValue,
+                resultStatus,
                 controlTooltip: dashboard.diseaseControlInfo?.tooltip || "",
               };
             })
@@ -497,7 +511,7 @@ export default function ClinicianDashboard() {
                     <td className="py-4 pr-4">{patient.gender}</td>
                     <td className="py-4 pr-4">{patient.subtype}</td>
                     <td className="py-4 pr-4">
-                      {patient.uct}/{patient.aect}
+                      {patient.uct ?? "N/A"}/{patient.aect ?? "N/A"}
                     </td>
                     <td className="py-4 pr-4">
                       <Badge
